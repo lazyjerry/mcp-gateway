@@ -54,9 +54,9 @@ AI client ──OAuth / MCP──▶ MCP 閘道 Worker（<閘道網域>）
 
 ```
 wrangler.example.jsonc  設定範例：kv_namespaces（OAUTH_KV）、d1_databases（DB）、assets（public/）；複製成 wrangler.jsonc 後填服務綁定
-migrations/             閘道 D1：稽核紀錄、登入失敗計數、帳號與授權事件、tool 頻率限制
+migrations/             閘道 D1：稽核紀錄、登入失敗計數、帳號與授權事件、tool 頻率限制、記住的勾選
 src/index.ts            OAuthProvider 的 default export，組合 auth 與 mcp
-src/auth.ts             登入、登出、同意頁、設定頁（授權列表、撤銷、稽核紀錄）的路由
+src/auth.ts             登入、登出、同意頁、設定頁（授權列表、撤銷、記住的勾選、稽核紀錄）的路由
 src/ui.ts               上面這些頁面與提示訊息的標記，結構照 Jerry UI 元件規格
 public/                 頁面用的靜態檔：jerry-ui.css、jerry-ui.js、jerry.png（元件庫，整檔不改）、app.css（稽核紀錄表）
 src/session.ts          閘道自己的登入 Session，只用在授權頁與設定頁
@@ -66,6 +66,7 @@ src/permissions.ts      權限判斷的唯一來源（tools/list 與 tools/call 
 src/audit.ts            稽核紀錄的寫入與保留
 src/events.ts           帳號與授權事件（登入、登出、同意、拒絕、撤銷）的寫入與保留
 src/mailer.ts           通知信：即時通知與每日統計信
+src/consents.ts         記住同意頁的勾選，算出重新授權時要預先勾選的範圍
 src/services/index.ts   讀 SERVICES、呼叫各服務的 describe() 與 call()、檢查回傳形狀與名稱前綴
 scripts/dev.sh          本機開發：閘道與 .dev.services 列出的服務一起跑
 test/                   Vitest 測試；test/fixtures/services.js 是範例服務，掛成 auxiliary worker 經服務綁定呼叫
@@ -179,11 +180,14 @@ npx wrangler secret put MAIL_TO                         #    收件地址，多�
 
 授權的有效期是 30 天，到期後 client 會再開一次瀏覽器。要改權限就撤銷後重新授權。
 
+重新授權時，同意頁會照這個 client 上次的勾選預先勾好；上次沒列出的權限（例如新串的服務）照服務的預設。撤銷授權不會清掉上次的勾選，要回到預設就到設定頁清除。client 重新註冊、換了 client_id 時，當成第一次授權。
+
 ### 管理已授權的 client
 
 登入 `https://<閘道網域>/settings`：
 
 - **已授權的 client**：列出每個 client 的名稱、權限與授權時間。按「撤銷」後，那個 client 的 token 立刻失效。
+- **記住的勾選**：列出每個 client 上次勾選的權限、最近一次同意的時間、來源 IP 與 User-Agent。按「清除記住的勾選」後，那個 client 下次授權時同意頁回到服務的預設。
 - **稽核紀錄**（`/settings/logs`）：最近 200 筆 tool 呼叫，欄位是時間、client、tool、結果（`ok`／`forbidden`／`throttled`／`error`）、處理時間。保留 30 天。
 - **帳號與授權**（同一頁的第二張表）：最近 200 筆登入成功、登入失敗、登入被擋、登出、同意授權、拒絕授權、撤銷授權，欄位是時間、事件、client、範圍、來源 IP 與 User-Agent。保留 30 天。
 - **通知信**（設定了 `MAIL_FROM` 與 `MAIL_TO` 才有）：登入成功、同意授權、撤銷授權每次寄一封；登入被擋時，同一個來源 IP 每 15 分鐘只寄一封。登入失敗、登出、拒絕授權不即時寄，每天 UTC 00:00（台灣 08:00）彙整過去 24 小時的次數與登入失敗的來源寄一封，沒有資料就不寄。

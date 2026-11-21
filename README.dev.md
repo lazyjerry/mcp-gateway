@@ -44,7 +44,7 @@
     scope: string;          // '<服務>:<名稱>'，小寫英數、底線、連字號
     label: string;          // 同意頁的勾選項目名稱
     description: string;    // 勾了之後 AI 可以做的事
-    defaultChecked: boolean;
+    defaultChecked: boolean; // client 第一次授權、或上次同意頁沒列出這個範圍時，是否預先勾選
   }[];
   tools: {
     name: string;           // '<服務>_<動作>'
@@ -145,7 +145,7 @@ npm run typecheck
 
 1. 部署服務（帶著 `describe()` 與 `call()`）。
 2. 閘道：`wrangler.jsonc` 加服務綁定，`npx wrangler secret put SERVICES`，再 `npx wrangler deploy`。
-3. 已授權的 client 不會自動得到新服務的範圍：到設定頁撤銷，讓 client 重新授權並勾選。
+3. 已授權的 client 不會自動得到新服務的範圍：到設定頁撤銷，讓 client 重新授權並勾選。同意頁會照上次的勾選預先勾好舊服務的範圍，新服務的範圍照 `defaultChecked`。
 
 ## 修改既有的串接
 
@@ -157,7 +157,7 @@ tool 與範圍都在服務端，**大部分的修改只要部署服務**，閘�
 | 改 tool 的參數或說明 | 改 `describe()` 與驗證，部署 | 不用動 | client 可能還留著舊的 tool 清單，重新連線後才更新 |
 | 改 tool 的名稱 | 改 `describe()` 與 `call()`，部署 | 不用動 | 等於移除舊 tool 再加新 tool；稽核紀錄裡舊名稱的紀錄不會跟著改 |
 | 拿掉一個 tool | 從 `describe()` 拿掉；`call()` 對這個名稱回 `ok: false` | 不用動 | tool 從 `tools/list` 消失 |
-| 加一個授權範圍 | `describe()` 的 `scopes` 加一筆，tool 的 `scopes` 對上，部署 | 不用動 | 要撤銷後重新授權才勾得到 |
+| 加一個授權範圍 | `describe()` 的 `scopes` 加一筆，tool 的 `scopes` 對上，部署 | 不用動 | 要撤銷後重新授權才勾得到；同意頁上這個範圍照 `defaultChecked`，其他範圍照上次的勾選 |
 | 把 tool 換到另一個範圍 | 改 tool 的 `scopes`，部署 | 不用動 | 一分鐘內生效：沒有新範圍的 client 失去這個 tool |
 | 改名或拿掉一個範圍 | 改 `describe()`，部署 | 不用動 | 已授權的 token 仍帶著舊的範圍字串，對不上任何 tool；要撤銷後重新授權 |
 | 改 Worker 名稱或 entrypoint 名稱 | 以新名稱部署，舊的保留到閘道切換完 | 改 `wrangler.jsonc` 的 `services`，部署 | 無 |
