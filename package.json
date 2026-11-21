@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "sh scripts/dev.sh",
-    "types": "wrangler types -c wrangler.example.jsonc --strict-vars=false",
+    "deploy": "sh scripts/deploy.sh",
+    "types": "wrangler types --strict-vars=false",
     "typecheck": "npm run types && tsc --noEmit && tsc --noEmit -p test",
     "test": "vitest run"
   },
@@ -21,5 +22,22 @@
     "typescript": "^5.9.3",
     "vitest": "^4.1.12",
     "wrangler": "^4.158.0"
+  },
+  "license": "MIT",
+  "cloudflare": {
+    "bindings": {
+      "GATEWAY_PASS": {
+        "description": "閘道登入密碼，授權與設定頁用。用 `openssl rand -base64 24` 產生並自己存好。"
+      },
+      "SERVICES": {
+        "description": "選用：串接的服務，`wrangler.jsonc` 裡服務綁定的 binding 名稱，多個以逗號分隔。剛部署還沒有服務時留空，之後再設定。"
+      },
+      "MAIL_FROM": {
+        "description": "選用：通知信的寄件地址，要在啟用 Email Routing 的網域下。不寄信就留空。"
+      },
+      "MAIL_TO": {
+        "description": "選用：通知信的收件地址，要是 Email Routing 已驗證的地址，多個以逗號分隔。不寄信就留空。"
+      }
+    }
   }
 }

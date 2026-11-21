@@ -4,7 +4,7 @@
 set -eu
 cd "$(dirname "$0")/.."
 
-[ -f wrangler.jsonc ] || { echo "找不到 wrangler.jsonc：先複製 wrangler.example.jsonc 再填入服務綁定" >&2; exit 1; }
+[ -f wrangler.local.jsonc ] || { echo "找不到 wrangler.local.jsonc：先複製 wrangler.jsonc 再填入服務綁定" >&2; exit 1; }
 
 # 設定檔往前加，呼叫時多帶的參數（例如 --port）留在最後；閘道的設定最後才加，排在第一個
 if [ -f .dev.services ]; then
@@ -13,6 +13,6 @@ if [ -f .dev.services ]; then
     set -- -c "$line" "$@"
   done < .dev.services
 fi
-set -- -c wrangler.jsonc "$@"
+set -- -c wrangler.local.jsonc "$@"
 
 exec npx wrangler dev "$@"

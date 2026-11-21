@@ -15,7 +15,7 @@
 | 負責 | 資料操作、驗證規則、連外與 AI 整理、自己的呼叫紀錄；**宣告自己的 tool 與授權範圍** | MCP、OAuth、登入、授權範圍檢查、頻率限制、稽核紀錄 |
 | 不做 | 不驗 OAuth token，不知道 MCP | 不保存服務的資料，不寫任何服務的 tool、範圍與業務規則 |
 
-閘道的 repo 不含任何實際服務的資訊：服務清單在 secret `SERVICES`，服務綁定在不進版控的 `wrangler.jsonc`，tool 與範圍由服務的 `describe()` 回報。
+閘道的 repo 不含任何實際服務的資訊：服務清單在 secret `SERVICES`，服務綁定在不進版控的 `wrangler.local.jsonc`，tool 與範圍由服務的 `describe()` 回報。
 
 順序固定是**服務先上線，閘道後接**：binding 指向不存在的 entrypoint 時，閘道問不到它的 tool。
 
@@ -96,9 +96,9 @@ RPC 不驗呼叫者：具名 entrypoint 沒有公開網址，只有同一個 Clo
 
 ## 閘道端要做的事
 
-不改程式，只改三個不進版控的設定：
+不改程式，只改三個設定。從本機部署的話這三個都不進版控；用 Deploy Button 部署的話，第 1 項改的是它建在你帳號裡那份 repo 的 `wrangler.jsonc`：
 
-1. **`wrangler.jsonc`**：在 `services` 加一筆，填 `binding`（服務名大寫）、`service`（Worker 名稱）、`entrypoint`（RPC class 名稱）。
+1. **`wrangler.local.jsonc`**：在 `services` 加一筆，填 `binding`（服務名大寫）、`service`（Worker 名稱）、`entrypoint`（RPC class 名稱）。
 2. **`SERVICES`**：把 binding 名稱加進去，多個以逗號分隔。本機寫在 `.dev.vars`，線上用 `npx wrangler secret put SERVICES`。
 3. **`.dev.services`**（只有本機開發需要）：加一行該服務 wrangler 設定檔的路徑，`npm run dev` 會一起跑。
 
@@ -127,7 +127,7 @@ RPC 不驗呼叫者：具名 entrypoint 沒有公開網址，只有同一個 Clo
 
 - `test/helpers/oauth.ts` 的 `authorize(scopes)` 取得 token，`test/helpers/mcp.ts` 的 `listTools`、`callTool` 經 `/mcp` 驗證。
 - 範例服務有三個 entrypoint：正常的、宣告了別人名稱的、回傳形狀不對的。要測新的契約情境就在這個檔加。
-- `vitest.config.ts` 讀 `wrangler.example.jsonc`，服務綁定與 `SERVICES` 在 `miniflare` 選項裡給，不依賴本機的 `wrangler.jsonc`。
+- `vitest.config.ts` 讀進版控的 `wrangler.jsonc`，服務綁定與 `SERVICES` 在 `miniflare` 選項裡給，不依賴本機的 `wrangler.local.jsonc`。
 - `test/setup.ts` 把 tool 的頻率限制關掉（`TOOL_LIMIT.intervalMs = 0`）；要測限制的測試自己打開、結束時關回去。
 
 交付前：
@@ -144,7 +144,7 @@ npm run typecheck
 ## 部署
 
 1. 部署服務（帶著 `describe()` 與 `call()`）。
-2. 閘道：`wrangler.jsonc` 加服務綁定，`npx wrangler secret put SERVICES`，再 `npx wrangler deploy`。
+2. 閘道：`wrangler.local.jsonc` 加服務綁定，`npx wrangler secret put SERVICES -c wrangler.local.jsonc`，再 `npm run deploy`。
 3. 已授權的 client 不會自動得到新服務的範圍：到設定頁撤銷，讓 client 重新授權並勾選。同意頁會照上次的勾選預先勾好舊服務的範圍，新服務的範圍照 `defaultChecked`。
 
 ## 修改既有的串接
@@ -160,8 +160,8 @@ tool 與範圍都在服務端，**大部分的修改只要部署服務**，閘�
 | 加一個授權範圍 | `describe()` 的 `scopes` 加一筆，tool 的 `scopes` 對上，部署 | 不用動 | 要撤銷後重新授權才勾得到；同意頁上這個範圍照 `defaultChecked`，其他範圍照上次的勾選 |
 | 把 tool 換到另一個範圍 | 改 tool 的 `scopes`，部署 | 不用動 | 一分鐘內生效：沒有新範圍的 client 失去這個 tool |
 | 改名或拿掉一個範圍 | 改 `describe()`，部署 | 不用動 | 已授權的 token 仍帶著舊的範圍字串，對不上任何 tool；要撤銷後重新授權 |
-| 改 Worker 名稱或 entrypoint 名稱 | 以新名稱部署，舊的保留到閘道切換完 | 改 `wrangler.jsonc` 的 `services`，部署 | 無 |
-| 改服務名稱（binding） | 所有 tool 與範圍換前綴，部署 | 改 `wrangler.jsonc` 與 `SERVICES`，部署 | 等於換了一個服務：全部要重新授權 |
+| 改 Worker 名稱或 entrypoint 名稱 | 以新名稱部署，舊的保留到閘道切換完 | 改 `wrangler.local.jsonc` 的 `services`，部署 | 無 |
+| 改服務名稱（binding） | 所有 tool 與範圍換前綴，部署 | 改 `wrangler.local.jsonc` 與 `SERVICES`，部署 | 等於換了一個服務：全部要重新授權 |
 
 快取的空窗：服務拿掉 tool 之後的一分鐘內，閘道可能還列著它，呼叫會進到服務的 `call()`，所以 `call()` 對不認得的名稱一定要回 `ok: false`。
 
@@ -186,7 +186,7 @@ tool 與範圍都在服務端，**大部分的修改只要部署服務**，閘�
 ### 閘道端
 
 1. `SERVICES` 拿掉這個 binding 名稱（`npx wrangler secret put SERVICES`）。做到這裡 tool 與範圍就消失了。
-2. `wrangler.jsonc` 的 `services` 拿掉 binding，`npx wrangler deploy`。
+2. `wrangler.local.jsonc` 的 `services` 拿掉 binding，`npm run deploy`。
 3. 本機的 `.dev.vars`、`.dev.services` 拿掉對應的內容。
 4. 走 HMAC 的服務另外 `npx wrangler secret delete SVC_<服務>_KEY`。
 

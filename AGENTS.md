@@ -17,7 +17,7 @@
 ## 規則
 
 - **職責**：閘道只做 MCP、OAuth、登入。其他功能放到各自的服務。
-- **不暴露服務**：進版控的檔案（程式、測試、設定、文件、commit 訊息）不出現實際服務的名稱、Worker 名稱、binding、tool、範圍與路徑；範例一律用 `notes`。服務綁定只寫在 `wrangler.jsonc`，本機要一起跑的服務只寫在 `.dev.services`，兩個檔與 `CLAUDE.local.md` 都不進版控，repo 裡的設定範例是 `wrangler.example.jsonc`。
+- **不暴露服務**：進版控的檔案（程式、測試、設定、文件、commit 訊息）不出現實際服務的名稱、Worker 名稱、binding、tool、範圍與路徑；範例一律用 `notes`。服務綁定只寫在 `wrangler.local.jsonc`，本機要一起跑的服務只寫在 `.dev.services`，兩個檔與 `CLAUDE.local.md` 都不進版控。進版控的 `wrangler.jsonc` 是給 Deploy Button 與測試用的通用設定，不加 `services`。
 - **不寫服務專屬的程式**：閘道對所有服務一視同仁。某個服務才需要的行為（回應的提醒文字、錯誤訊息的轉換、參數規則）放在該服務的 `describe()` 與 `call()`，不加進閘道。
 - **連線方式**：同一個 Cloudflare 帳號的服務用服務綁定 + `WorkerEntrypoint` RPC。其他服務規劃用 HTTPS + HMAC，每個服務一把金鑰，目前沒有實作。
 - **命名**：服務名稱是 binding 名稱的小寫。tool 是 `<服務>_<動作>`，授權範圍是 `<服務>:read`／`<服務>:write`，會花 AI 額度或連外的操作另開 `<服務>:<動作>`（例如 `<服務>:fetch`），金鑰是 `SVC_<服務>_KEY`。閘道丟掉不是該服務名稱開頭的 tool 與範圍，這個檢查不能放寬。
@@ -33,4 +33,4 @@
 
 ## 指令
 
-開發、型別檢查、測試的指令以 `package.json` 的 `scripts` 為準；部署步驟見 `README.md`〈部署〉。`npm test` 與 `npm run typecheck` 讀 `wrangler.example.jsonc`，不需要本機設定；`npm run dev` 與部署才需要 `wrangler.jsonc`。
+開發、型別檢查、測試的指令以 `package.json` 的 `scripts` 為準；部署步驟見 `README.md`〈部署〉。`npm test` 與 `npm run typecheck` 讀 `wrangler.jsonc`，不需要本機設定；`npm run dev` 需要 `wrangler.local.jsonc`，`npm run deploy`（`scripts/deploy.sh`）有 `wrangler.local.jsonc` 就用它，沒有才用 `wrangler.jsonc`。

@@ -3,7 +3,7 @@ import { cloudflareTest, readD1Migrations } from '@cloudflare/vitest-plugin';
 import { defineConfig } from 'vitest/config';
 
 // 閘道測試接 repo 內的範例服務（test/fixtures/services.js），掛成 auxiliary worker，經服務綁定走真的 RPC。
-// 設定讀 wrangler.example.jsonc：測試不依賴本機的 wrangler.jsonc，也不依賴任何實際串接的服務
+// 設定讀進版控的 wrangler.jsonc：測試不依賴本機的 wrangler.local.jsonc，也不依賴任何實際串接的服務
 const FIXTURE = 'test/fixtures/services.js';
 
 export default defineConfig(async () => {
@@ -11,7 +11,7 @@ export default defineConfig(async () => {
   return {
     plugins: [
       cloudflareTest({
-        wrangler: { configPath: './wrangler.example.jsonc' },
+        wrangler: { configPath: './wrangler.jsonc' },
         remoteBindings: false,
         miniflare: {
           bindings: {

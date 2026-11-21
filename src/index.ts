@@ -32,7 +32,7 @@ export default {
     const scopes = [...scopesOf(await loadServices(env))].sort();
     return providerFor(new URL(request.url).origin, scopes).fetch(request, env, ctx);
   },
-  // 每日統計信；排程時間在 wrangler.jsonc 的 triggers
+  // 每日統計信；排程時間在 wrangler 設定的 triggers
   async scheduled(controller, env) {
     await sendDigestMail(env, new Date(controller.scheduledTime));
   },

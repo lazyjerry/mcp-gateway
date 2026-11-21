@@ -3,5 +3,5 @@ GATEWAY_PASS=
 # 選用：通知信的寄件與收件地址（收件多個以逗號分隔）。任一個沒設定就不寄信
 MAIL_FROM=
 MAIL_TO=
-# 串接的服務：wrangler.jsonc 裡服務綁定的 binding 名稱，多個以逗號分隔。沒設定就沒有任何 tool 與授權範圍
+# 串接的服務：wrangler 設定裡服務綁定的 binding 名稱，多個以逗號分隔。沒設定就沒有任何 tool 與授權範圍
 SERVICES=
