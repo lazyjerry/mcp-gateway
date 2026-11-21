@@ -1,0 +1,7 @@
+# 閘道登入密碼：授權頁與設定頁用。未設定時整個授權流程回 503。可用 `openssl rand -base64 24` 產生
+GATEWAY_PASS=
+# 選用：通知信的寄件與收件地址（收件多個以逗號分隔）。任一個沒設定就不寄信
+MAIL_FROM=
+MAIL_TO=
+# 串接的服務：wrangler.jsonc 裡服務綁定的 binding 名稱，多個以逗號分隔。沒設定就沒有任何 tool 與授權範圍
+SERVICES=

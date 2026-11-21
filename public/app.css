@@ -1,0 +1,17 @@
+/* 專案專屬樣式：只用 .app- 開頭的 class 與 jerry-ui 的 token，規則見 templates/index.md。 */
+
+/* 稽核紀錄表：元件庫沒有表格元件，先在這裡排版（入庫候選） */
+.app-log-scroll { overflow-x: auto; }
+.app-log { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); line-height: var(--lh-snug); }
+.app-log th,
+.app-log td { padding: var(--space-2) var(--space-3); border-bottom: var(--line); text-align: left; vertical-align: top; }
+.app-log th { font-size: var(--fs-xs); font-weight: var(--fw-heavy); white-space: nowrap; }
+.app-log .app-log-num { font-family: var(--mono); white-space: nowrap; }
+.app-log .app-log-id { color: var(--muted); font-family: var(--mono); font-size: var(--fs-xs); }
+.app-log .app-log-ok { color: var(--green-ink); font-weight: var(--fw-heavy); }
+.app-log .app-log-forbidden { color: var(--amber-ink); font-weight: var(--fw-heavy); }
+.app-log .app-log-throttled { color: var(--amber-ink); font-weight: var(--fw-heavy); }
+.app-log .app-log-error { color: var(--danger-ink); font-weight: var(--fw-heavy); }
+
+/* 帳號與授權事件表：沿用稽核紀錄表，User-Agent 很長，允許換行 */
+.app-log .app-log-agent { display: inline-block; max-width: 28ch; white-space: normal; overflow-wrap: anywhere; }

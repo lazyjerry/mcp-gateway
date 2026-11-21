@@ -1,0 +1,20 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "mcp-gateway",
+  "main": "src/index.ts",
+  "compatibility_date": "2026-11-04",
+  // 頁面用的元件庫（jerry-ui.css、jerry-ui.js、jerry.png）與 app.css。其餘路徑都交給 Worker
+  "assets": { "directory": "./public" },
+  // 同帳號的服務走服務綁定 RPC；binding 名稱是服務名大寫，再把 binding 名稱列進 secret SERVICES。
+  // 複製成 wrangler.jsonc（不進版控）後在那一份填實際的服務：
+  // "services": [{ "binding": "<服務名大寫>", "service": "<Worker 名稱>", "entrypoint": "<WorkerEntrypoint 類別名稱>" }],
+  // OAuth 的 client、授權、token。id 留在設定檔外，首次 deploy 依 binding 建立
+  "kv_namespaces": [{ "binding": "OAUTH_KV" }],
+  // 稽核紀錄
+  "d1_databases": [{ "binding": "DB", "database_name": "mcp-gateway", "migrations_dir": "migrations" }],
+  "observability": { "enabled": true },
+  // 通知信。走 Email Routing：寄件地址（MAIL_FROM）要在啟用 Email Routing 的網域下，收件地址（MAIL_TO）要是已驗證的地址
+  "send_email": [{ "name": "EMAIL" }],
+  // 每日統計信：UTC 00:00（台灣 08:00）
+  "triggers": { "crons": ["0 0 * * *"] }
+}

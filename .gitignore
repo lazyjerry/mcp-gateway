@@ -1,0 +1,18 @@
+node_modules/
+.wrangler/
+.dev.vars
+.env
+worker-configuration.d.ts
+.DS_Store
+dist/
+
+# TDD 實作方案只存在本機
+docs/實作方案/
+
+# 實際串接的服務只存在本機：wrangler 設定（範例見 wrangler.example.jsonc）與本機開發要一起跑的服務清單
+wrangler.jsonc
+.dev.services
+CLAUDE.local.md
+
+# 檢查報告含實際服務的細節，只存在本機
+docs/reports/
