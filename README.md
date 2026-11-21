@@ -1,6 +1,8 @@
 # MCP 閘道
 
-> 指令以 `package.json` 的 `scripts` 與 `wrangler.example.jsonc` 為準。
+> 指令以 `package.json` 的 `scripts` 與 `wrangler.jsonc` 為準。
+>
+> [![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/lazyjerry/mcp-gateway)　**按鈕部署完還沒結束**：還要自己加服務綁定、設定 `SERVICES`，否則閘道沒有任何 tool，清單見〈部署〉的方式一。
 
 一個放在獨立網域的 Cloudflare Worker，讓 AI client（Claude Code、claude.ai、Claude Desktop、ChatGPT、Cursor 等）透過 MCP（Model Context Protocol）操作自建的各種服務。
 
@@ -32,7 +34,7 @@ AI client ──OAuth / MCP──▶ MCP 閘道 Worker（<閘道網域>）
 
 這個 repo 不含任何實際服務的資訊。有哪些服務、每個服務有哪些 tool 與授權範圍，執行時才知道：
 
-- **服務清單**：secret `SERVICES` 列出服務綁定的 binding 名稱，多個以逗號分隔。binding 宣告在 `wrangler.jsonc`，這個檔不進版控，repo 裡只有 `wrangler.example.jsonc`。
+- **服務清單**：secret `SERVICES` 列出服務綁定的 binding 名稱，多個以逗號分隔。binding 宣告在 wrangler 設定的 `services`；repo 裡的 `wrangler.jsonc` 不含任何服務，實際的綁定寫在不進版控的 `wrangler.local.jsonc`。
 - **tool 與範圍**：每個服務的 RPC entrypoint 提供 `describe()`，回傳它在同意頁顯示的名稱、授權範圍，以及每個 tool 的名稱、說明、參數的 JSON Schema、標註、需要的範圍。
 - **執行**：`tools/call` 轉給該服務的 `call(tool, args, caller)`，回傳值成為 MCP 的 tool 結果。
 - **服務名稱**：binding 名稱的小寫，例如 `NOTES` 是 `notes`。服務只能宣告 `notes:` 開頭的範圍與 `notes_` 開頭的 tool，tool 用到的範圍也要是它自己宣告的；不符合的閘道會丟掉，一個服務冒用不了另一個服務的權限。
@@ -53,7 +55,7 @@ AI client ──OAuth / MCP──▶ MCP 閘道 Worker（<閘道網域>）
 ## 專案結構
 
 ```
-wrangler.example.jsonc  設定範例：kv_namespaces（OAUTH_KV）、d1_databases（DB）、assets（public/）；複製成 wrangler.jsonc 後填服務綁定
+wrangler.jsonc          通用設定（Deploy Button 與測試用）：kv_namespaces（OAUTH_KV）、d1_databases（DB）、assets（public/）；不含服務，複製成 wrangler.local.jsonc 後填服務綁定
 migrations/             閘道 D1：稽核紀錄、登入失敗計數、帳號與授權事件、tool 頻率限制、記住的勾選
 src/index.ts            OAuthProvider 的 default export，組合 auth 與 mcp
 src/auth.ts             登入、登出、同意頁、設定頁（授權列表、撤銷、記住的勾選、稽核紀錄）的路由
@@ -69,10 +71,11 @@ src/mailer.ts           通知信：即時通知與每日統計信
 src/consents.ts         記住同意頁的勾選，算出重新授權時要預先勾選的範圍
 src/services/index.ts   讀 SERVICES、呼叫各服務的 describe() 與 call()、檢查回傳形狀與名稱前綴
 scripts/dev.sh          本機開發：閘道與 .dev.services 列出的服務一起跑
+scripts/deploy.sh       部署：先套 D1 migration 再部署；有 wrangler.local.jsonc 就用它
 test/                   Vitest 測試；test/fixtures/services.js 是範例服務，掛成 auxiliary worker 經服務綁定呼叫
 ```
 
-不進版控、只存在本機的檔案：`wrangler.jsonc`（實際的服務綁定）、`.dev.vars`（機密與 `SERVICES`）、`.dev.services`（本機要一起跑的服務）。
+不進版控、只存在本機的檔案：`wrangler.local.jsonc`（實際的服務綁定）、`.dev.vars`（機密與 `SERVICES`）、`.dev.services`（本機要一起跑的服務）。
 
 主要依賴：`@cloudflare/workers-oauth-provider`、`agents`（無狀態 `createMcpHandler`，不需要 Durable Objects）、`hono`、`zod`。
 
@@ -87,14 +90,15 @@ test/                   Vitest 測試；test/fixtures/services.js 是範例服�
 ### 本機開發
 
 ```bash
-npm test          # 測試：接 repo 內的範例服務，不需要 wrangler.jsonc，也不需要任何實際的服務
+npm install
+npm test          # 測試：接 repo 內的範例服務，不需要 wrangler.local.jsonc，也不需要任何實際的服務
 npm run typecheck # 型別檢查
 ```
 
 要在本機接實際的服務，先準備三個不進版控的檔案：
 
 ```bash
-cp wrangler.example.jsonc wrangler.jsonc   # 在 services 填入服務綁定：binding（服務名大寫）、service（Worker 名稱）、entrypoint
+cp wrangler.jsonc wrangler.local.jsonc      # 在 services 填入服務綁定：binding（服務名大寫）、service（Worker 名稱）、entrypoint
 cp .dev.vars.example .dev.vars             # 至少填 GATEWAY_PASS；SERVICES 填 binding 名稱，多個以逗號分隔
 echo '<服務的 wrangler 設定檔路徑>' >> .dev.services   # 一行一個，本機要一起跑的服務
 npm run dev                                # 閘道與 .dev.services 列出的服務一起跑
@@ -106,47 +110,69 @@ npm run dev                                # 閘道與 .dev.services 列出的�
 
 ### 部署
 
-1. **先部署服務**：要帶著提供 `describe()` 與 `call()` 的 RPC entrypoint 上線，否則閘道問不到它的 tool。
-2. **部署閘道並套用 D1 migration**：`wrangler.jsonc`（從 `wrangler.example.jsonc` 複製、填好服務綁定，不進版控）不寫 KV 與 D1 的 id，首次 deploy 依 binding 自動建立。
+兩種方式擇一。不論哪一種，**要串接的服務都要先部署在同一個 Cloudflare 帳號**，並帶著提供 `describe()` 與 `call()` 的 RPC entrypoint，否則閘道問不到它的 tool。
 
-   ```bash
-   npx wrangler deploy
-   npx wrangler d1 migrations apply mcp-gateway --remote
+#### 方式一：Deploy Button
+
+[![Deploy to Cloudflare](https://deploy.workers.cloudflare.com/button)](https://deploy.workers.cloudflare.com/?url=https://github.com/lazyjerry/mcp-gateway)
+
+> **按鈕只部署出一個沒有服務的閘道，部署完還要自己做這幾件事，漏掉的話 AI client 連上後一個 tool 都沒有：**
+>
+> - [ ] 要串接的服務已部署在同一個 Cloudflare 帳號，並帶著 `describe()` 與 `call()` 的 RPC entrypoint
+> - [ ] 在 Cloudflare 幫你建的那份 repo，於 `wrangler.jsonc` 加上 `services`，push 後等 Workers Builds 重新部署（下面第 4 步）
+> - [ ] 在 Worker 的 Settings → Variables and Secrets 設定 `SERVICES`，值是上一步的 binding 名稱
+> - [ ] 要收通知信的話：設定 `MAIL_FROM`、`MAIL_TO`，並完成 Email Routing 的網域與收件地址驗證（見〈部署之後〉）
+> - [ ] 用 AI client 連上 `/mcp` 走一次授權，確認同意頁列出服務的權限
+
+1. 按上面的按鈕，選 Cloudflare 帳號與 Git 帳號。Cloudflare 會在你的 GitHub 或 GitLab 建一份這個 repo，並接上 Workers Builds：之後每次 push 都會重新部署。
+2. 部署畫面會自動建立 KV（`OAUTH_KV`）與 D1（`DB`），並請你填 `.dev.vars.example` 列出的 secret：
+   - `GATEWAY_PASS`：必填，閘道登入密碼。用 `openssl rand -base64 24` 產生並自己存好。
+   - `SERVICES`、`MAIL_FROM`、`MAIL_TO`：選用，還沒有服務、不寄信就留空。
+3. 部署指令是 `npm run deploy`（`scripts/deploy.sh`）：先套 D1 migration，再部署 Worker。
+4. **加上服務**：服務綁定沒辦法在部署畫面設定，也不能在 Cloudflare 後台手動加（下次部署會被設定檔蓋掉）。到 Cloudflare 幫你建的那份 repo，在 `wrangler.jsonc` 加 `services`：
+
+   ```jsonc
+   "services": [{ "binding": "NOTES", "service": "<服務的 Worker 名稱>", "entrypoint": "<WorkerEntrypoint 類別名稱>" }],
    ```
 
-3. **設定閘道的機密**：密碼設好之前，登入、同意、設定頁都回 503，`/mcp` 回 401。
+   push 之後 Workers Builds 會自動重新部署。再到 Cloudflare 後台 Worker 的 Settings → Variables and Secrets，把 `SERVICES` 設成 binding 名稱（例如 `NOTES`）。那份 repo 會寫進你的服務名稱，想保密就設成 private。
+
+#### 方式二：從本機部署
+
+```bash
+npm install
+npx wrangler login
+cp wrangler.jsonc wrangler.local.jsonc        # 在 services 填入服務綁定；這份不進版控
+```
+
+1. **首次部署**：D1 要等第一次 deploy 才會建立，所以第一次先單獨部署，再套 migration。`wrangler.local.jsonc` 不寫 KV 與 D1 的 id，首次 deploy 依 binding 自動建立，之後沿用。
 
    ```bash
-   openssl rand -base64 24                       # 產生一組密碼，自己存好
-   npx wrangler secret put GATEWAY_PASS          # 閘道登入密碼，貼上剛才那組
-   npx wrangler secret put SERVICES              # 服務綁定的 binding 名稱，多個以逗號分隔
-   npx wrangler secret put SVC_<服務>_KEY        # 只有走 HMAC 的服務需要
-   npx wrangler secret put MAIL_FROM             # 選用：通知信的寄件地址
-   npx wrangler secret put MAIL_TO               # 選用：通知信的收件地址，多個以逗號分隔
+   npx wrangler deploy -c wrangler.local.jsonc
+   npm run deploy                              # 套 D1 migration 後再部署一次
    ```
 
-   `SERVICES` 沒設定時閘道照常運作，只是沒有任何 tool，同意頁也沒有權限可勾。
+2. **設定閘道的機密**：密碼設好之前，登入、同意、設定頁都回 503，`/mcp` 回 401。
 
-   通知信走 Email Routing：`MAIL_FROM` 要在帳號裡啟用 Email Routing 的網域下，`MAIL_TO` 要是已驗證的收件地址。兩個任一個沒設定就不寄信，其他功能不受影響。
+   ```bash
+   openssl rand -base64 24                                         # 產生一組密碼，自己存好
+   npx wrangler secret put GATEWAY_PASS -c wrangler.local.jsonc    # 閘道登入密碼，貼上剛才那組
+   npx wrangler secret put SERVICES -c wrangler.local.jsonc        # 服務綁定的 binding 名稱，多個以逗號分隔
+   npx wrangler secret put SVC_<服務>_KEY -c wrangler.local.jsonc  # 只有走 HMAC 的服務需要
+   npx wrangler secret put MAIL_FROM -c wrangler.local.jsonc       # 選用：通知信的寄件地址
+   npx wrangler secret put MAIL_TO -c wrangler.local.jsonc         # 選用：通知信的收件地址，多個以逗號分隔
+   ```
 
-4. **綁定自訂網域**（選用）：換網域後 OAuth 的網址跟著變，所有 client 要重新授權。日後若加入 Passkey 登入，Passkey 也綁這個 hostname，換網域就要重新註冊。
+3. **之後更新**：`npm run deploy`。它有 `wrangler.local.jsonc` 就用它，先套新的 migration 再部署；KV、D1 與已設定的機密都會沿用。多串一個服務時，在 `wrangler.local.jsonc` 加服務綁定、重新設定 `SERVICES`，再部署。
 
 **帳號不只一個時**：在自己的終端機執行，wrangler 會列出帳號讓你選，選服務所在的那一個。腳本或其他非互動環境選不了，要在指令前加 `CLOUDFLARE_ACCOUNT_ID=<帳號 id>`；id 用 `npx wrangler whoami` 查。
 
-**之後更新**：有新的 migration 就先套 migration，再 `npx wrangler deploy`。KV、D1 與已設定的機密都會沿用。多串一個服務時，在 `wrangler.jsonc` 加服務綁定、重新設定 `SERVICES`，再部署。
+#### 部署之後
 
-**已部署的閘道加上事件紀錄與通知信**：照下面的順序做。第 1、2 步做完，紀錄頁就有「帳號與授權」那張表；第 3 步做完才會寄信。
-
-```bash
-npx wrangler d1 migrations apply mcp-gateway --remote   # 1. 建 auth_events 表
-npx wrangler deploy                                     # 2. 帶上 send_email binding 與每日排程（UTC 00:00）
-npx wrangler secret put MAIL_FROM                       # 3. 寄件地址
-npx wrangler secret put MAIL_TO                         #    收件地址，多個以逗號分隔
-```
-
-- 寄信的前提在 Cloudflare 後台 Email Routing 完成：寄件地址的網域啟用 Email Routing，每個收件地址都加進 Destination addresses 並點過驗證信。
-- 確認方式：登入一次設定頁，紀錄頁出現「登入成功」，信箱收到同名的通知信。沒收到時看 `npx wrangler tail` 裡的 `mail failed`。
-- 先部署、還沒套 migration 的期間，事件寫不進去（log 會有 `event log failed`），登入與授權照常。
+- `SERVICES` 沒設定時閘道照常運作，只是沒有任何 tool，同意頁也沒有權限可勾。
+- **通知信**走 Email Routing：`MAIL_FROM` 的網域要啟用 Email Routing，`MAIL_TO` 的每個地址都要加進 Destination addresses 並點過驗證信。兩個任一個沒設定就不寄信，其他功能不受影響。確認方式：登入一次設定頁，紀錄頁出現「登入成功」，信箱收到同名的通知信；沒收到時看 `npx wrangler tail` 裡的 `mail failed`。
+- **自訂網域**（選用）：在 Cloudflare 後台替 Worker 綁定。換網域後 OAuth 的網址跟著變，所有 client 要重新授權。日後若加入 Passkey 登入，Passkey 也綁這個 hostname，換網域就要重新註冊。
+- **關掉用不到的網址**（建議）：綁好自訂網域後，在 Worker 的 Settings → Domains & Routes 關掉 `workers.dev` 與 Preview URLs，只留一個入口。
 
 ### 接上 AI client
 
@@ -197,10 +223,10 @@ npx wrangler secret put MAIL_TO                         #    收件地址，多�
 
 | 狀況 | 原因與處理 |
 |---|---|
-| 登入頁、設定頁回 503 | 還沒設定 `GATEWAY_PASS`，照〈部署〉第 3 步設定 |
+| 登入頁、設定頁回 503 | 還沒設定 `GATEWAY_PASS`，照〈部署〉設定 `GATEWAY_PASS` |
 | 登入回 429「密碼錯誤次數過多」 | 同一個來源 IP 15 分鐘內試了超過 5 次。等 15 分鐘，或執行 `npx wrangler d1 execute mcp-gateway --remote --command "DELETE FROM login_attempts"` 清掉計數 |
 | AI 說沒有某個 tool，或回「沒有…的授權範圍」 | 授權時沒勾對應的權限。到設定頁撤銷，讓 client 重新授權 |
-| AI 完全沒有 tool，同意頁沒有任何權限可勾 | `SERVICES` 沒設定、binding 名稱與 `wrangler.jsonc` 對不上，或服務的 `describe()` 失敗。看 `npx wrangler tail` 裡的 `service binding missing`、`service manifest invalid`、`service describe failed` |
+| AI 完全沒有 tool，同意頁沒有任何權限可勾 | `SERVICES` 沒設定、binding 名稱與 wrangler 設定的 `services` 對不上，或服務的 `describe()` 失敗。看 `npx wrangler tail` 裡的 `service binding missing`、`service manifest invalid`、`service describe failed` |
 | 某個服務少了幾個 tool 或權限 | 名稱不是該服務名稱開頭，被閘道丟掉。log 有 `service manifest entries dropped` |
 | 稽核紀錄出現 `forbidden` | 有 client 呼叫了它沒被授權的 tool；呼叫沒有執行 |
 | AI 回「3 秒內只能執行一次寫入動作…請排隊」，稽核紀錄出現 `throttled` | 同一個 client 距離上一次寫入類 tool 不到 3 秒，這次沒有執行。等 3 秒再送，一次只送一個。服務標了 `readOnlyHint` 的 tool 不受限。間隔在 `src/throttle.ts` 的 `TOOL_LIMIT` |
@@ -225,3 +251,7 @@ npx wrangler secret put MAIL_TO                         #    收件地址，多�
 ## 開發
 
 開發規則見 [AGENTS.md](AGENTS.md)；服務端的契約與新增、修改、移除服務串接的步驟見 [README.dev.md](README.dev.md)。
+
+## 授權
+
+[MIT](LICENSE)
