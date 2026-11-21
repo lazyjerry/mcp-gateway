@@ -226,6 +226,10 @@ cp wrangler.jsonc wrangler.local.jsonc        # 在 services 填入服務綁定�
 2. 同意頁列出這個 client 的名稱、同意後會導回的網址，以及可勾選的權限。名稱是 client 自己填的，**以導回的網址為準**，不認得就按拒絕。
 3. 勾選要給的權限後按同意。權限依服務分組，每一項的名稱、說明與預設有沒有勾選，都由該服務宣告；通常只有查詢類預設勾選。
 
+![用 MCP Inspector 走一次授權：登入、只勾查詢權限、同意後連上，tools/list 只列出查詢類的 tool](docs/media/mcp-auth.gif)
+
+上圖是本機的閘道接 repo 內的範例服務 `notes`，用 MCP Inspector 走一次授權：同意頁只勾「查詢記事」，連上後 `tools/list` 只看得到 `notes_list`、`notes_get`，看不到需要 `notes:write` 的 `notes_add`。
+
 授權的有效期是 30 天，到期後 client 會再開一次瀏覽器。要改權限就撤銷後重新授權。
 
 重新授權時，同意頁會照這個 client 上次的勾選預先勾好；上次沒列出的權限（例如新串的服務）照服務的預設。撤銷授權不會清掉上次的勾選，要回到預設就到設定頁清除。client 重新註冊、換了 client_id 時，當成第一次授權。

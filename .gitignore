@@ -16,3 +16,6 @@ CLAUDE.local.md
 
 # 檢查報告含實際服務的細節，只存在本機
 docs/reports/
+
+# 示範影片只存在本機，README 用同名的 gif
+docs/media/*.mp4
