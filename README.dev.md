@@ -15,7 +15,7 @@
 | 負責 | 資料操作、驗證規則、連外與 AI 整理、自己的呼叫紀錄；**宣告自己的 tool 與授權範圍** | MCP、OAuth、登入、授權範圍檢查、頻率限制、稽核紀錄 |
 | 不做 | 不驗 OAuth token，不知道 MCP | 不保存服務的資料，不寫任何服務的 tool、範圍與業務規則 |
 
-閘道的 repo 不含任何實際服務的資訊：服務清單在 secret `SERVICES`，服務綁定在不進版控的 `wrangler.local.jsonc`，tool 與範圍由服務的 `describe()` 回報。
+閘道的程式與設定不含任何實際服務的資訊（README 的書籤服務範例除外）：服務清單在 secret `SERVICES`，服務綁定在不進版控的 `wrangler.local.jsonc`，tool 與範圍由服務的 `describe()` 回報。
 
 順序固定是**服務先上線，閘道後接**：binding 指向不存在的 entrypoint 時，閘道問不到它的 tool。
 

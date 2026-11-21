@@ -32,7 +32,7 @@ AI client ──OAuth / MCP──▶ MCP 閘道 Worker（<閘道網域>）
 
 ## 串接的服務
 
-這個 repo 不含任何實際服務的資訊。有哪些服務、每個服務有哪些 tool 與授權範圍，執行時才知道：
+閘道的程式與設定不含任何實際服務的資訊（串接範例見〈範例：串接書籤服務〉）。有哪些服務、每個服務有哪些 tool 與授權範圍，執行時才知道：
 
 - **服務清單**：secret `SERVICES` 列出服務綁定的 binding 名稱，多個以逗號分隔。binding 宣告在 wrangler 設定的 `services`；repo 裡的 `wrangler.jsonc` 不含任何服務，實際的綁定寫在不進版控的 `wrangler.local.jsonc`。
 - **tool 與範圍**：每個服務的 RPC entrypoint 提供 `describe()`，回傳它在同意頁顯示的名稱、授權範圍，以及每個 tool 的名稱、說明、參數的 JSON Schema、標註、需要的範圍。
@@ -173,6 +173,28 @@ cp wrangler.jsonc wrangler.local.jsonc        # 在 services 填入服務綁定�
 - **通知信**走 Email Routing：`MAIL_FROM` 的網域要啟用 Email Routing，`MAIL_TO` 的每個地址都要加進 Destination addresses 並點過驗證信。兩個任一個沒設定就不寄信，其他功能不受影響。確認方式：登入一次設定頁，紀錄頁出現「登入成功」，信箱收到同名的通知信；沒收到時看 `npx wrangler tail` 裡的 `mail failed`。
 - **自訂網域**（選用）：在 Cloudflare 後台替 Worker 綁定。換網域後 OAuth 的網址跟著變，所有 client 要重新授權。日後若加入 Passkey 登入，Passkey 也綁這個 hostname，換網域就要重新註冊。
 - **關掉用不到的網址**（建議）：綁好自訂網域後，在 Worker 的 Settings → Domains & Routes 關掉 `workers.dev` 與 Preview URLs，只留一個入口。
+
+### 範例：串接書籤服務
+
+[lazyjerry/bookmark-shelf](https://github.com/lazyjerry/bookmark-shelf) 是照 [README.dev.md](README.dev.md)〈服務端的契約〉實作的服務，可以拿來走一次完整的串接。它的 RPC entrypoint 是 `BookmarkRpc`（在它的 `src/rpc.ts`），Worker 名稱是 `bookmark-shelf`。
+
+1. **部署書籤服務**：照它 README 的〈部署〉，用它的 Deploy Button 或手動部署，部署到與閘道同一個 Cloudflare 帳號。部署時改了 Worker 名稱的話，下一步的 `service` 要填改過的名稱。
+2. **在閘道加服務綁定**：按鈕部署的改 Cloudflare 幫你建的那份 repo 裡的 `wrangler.jsonc`，本機部署的改 `wrangler.local.jsonc`：
+
+   ```jsonc
+   "services": [{ "binding": "BOOKMARKS", "service": "bookmark-shelf", "entrypoint": "BookmarkRpc" }],
+   ```
+
+   按鈕部署的 push 後等 Workers Builds 重新部署；本機部署的執行 `npm run deploy`。
+3. **設定 `SERVICES`**：值是 `BOOKMARKS`。按鈕部署的到 Worker 的 Settings → Variables and Secrets 設定；本機部署的執行 `npx wrangler secret put SERVICES -c wrangler.local.jsonc`。服務名稱是 binding 的小寫 `bookmarks`，所以書籤服務只能宣告 `bookmarks:` 開頭的範圍與 `bookmarks_` 開頭的 tool。
+4. **選用**：在書籤服務設定 `APP_URL`（書籤服務自己的網址）。經閘道新增書籤時，通知信裡的連結會用它。
+5. **確認**：AI client 連上 `/mcp` 走授權。同意頁的「書籤收藏櫃」分組應該列出兩個權限：
+   - **查詢書籤**（`bookmarks:read`，預設勾選）：可以用 `bookmarks_search`、`bookmarks_get`、`bookmarks_overview`
+   - **新增書籤**（`bookmarks:write`，預設不勾）：可以用 `bookmarks_add`，不能修改或刪除
+
+   只勾查詢的話，`tools/list` 看不到 `bookmarks_add`，直接呼叫也會被拒絕。
+
+範圍與 tool 由書籤服務的 `describe()` 決定，以它的 repo 為準；它改了 tool 後，閘道最多一分鐘就會跟上，不必重新部署。
 
 ### 接上 AI client
 
