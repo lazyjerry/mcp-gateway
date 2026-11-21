@@ -2,6 +2,7 @@
 import type { AuthRequest, GrantSummary, OAuthHelpers } from '@cloudflare/workers-oauth-provider';
 import { Hono, type Context } from 'hono';
 import { listRecent } from './audit';
+import { findChoice, forgetChoice, listChoices, presetScopes, rememberChoice } from './consents';
 import { listRecentEvents, recordEvent, type AuthEventClient, type AuthEventType } from './events';
 import { INSTANT_EVENTS, sendEventMail } from './mailer';
 import { loadServices, scopesOf } from './services';
@@ -117,14 +118,19 @@ authApp.get('/authorize', async (c) => {
   const session = await readSession(c);
   const path = new URL(c.req.url).pathname + new URL(c.req.url).search;
   if (!session) return c.html(loginPage(path));
-  const client = await c.env.OAUTH_PROVIDER.lookupClient(authRequest.clientId);
+  const [client, services, choice] = await Promise.all([
+    c.env.OAUTH_PROVIDER.lookupClient(authRequest.clientId),
+    loadServices(c.env),
+    findChoice(c.env.DB, authRequest.clientId),
+  ]);
   return c.html(
     consentPage({
       action: path,
       csrf: session.csrf,
       clientName: client?.clientName || authRequest.clientId,
       redirectUri: authRequest.redirectUri,
-      services: await loadServices(c.env),
+      services,
+      checked: presetScopes(services.flatMap((s) => s.scopes), choice),
     }),
   );
 });
@@ -156,6 +162,7 @@ authApp.post('/authorize', async (c) => {
     props: { scopes },
   });
   await track(c, 'grant_approved', { ...eventClient, scopes });
+  await rememberChoice(c.env.DB, c.req.raw, eventClient, allScopes, scopes);
   return c.redirect(redirectTo, 302);
 });
 
@@ -187,11 +194,12 @@ authApp.post('/logout', async (c) => {
 authApp.get('/settings', async (c) => {
   const session = await readSession(c);
   if (!session) return c.redirect('/login?next=/settings', 302);
-  const grants = await allGrants(c.env.OAUTH_PROVIDER);
+  const [grants, choices] = await Promise.all([allGrants(c.env.OAUTH_PROVIDER), listChoices(c.env.DB)]);
   return c.html(
     settingsPage(
       session.csrf,
       grants.map((g) => ({ id: g.id, clientId: g.clientId, clientName: clientName(g), scopes: g.scope, createdAt: new Date(g.createdAt * 1000).toISOString() })),
+      choices,
     ),
   );
 });
@@ -207,6 +215,18 @@ authApp.post('/settings/revoke', async (c) => {
   const grant = (await allGrants(c.env.OAUTH_PROVIDER)).find((g) => g.id === body.grant);
   await c.env.OAUTH_PROVIDER.revokeGrant(body.grant, OWNER);
   if (grant) await track(c, 'grant_revoked', { clientId: grant.clientId, clientName: clientName(grant) });
+  return c.redirect('/settings', 302);
+});
+
+// 清除記住的勾選：這個 client 下次授權時，同意頁回到服務的預設
+authApp.post('/settings/forget', async (c) => {
+  const checked = await checkedForm(c);
+  if (checked instanceof Response) return checked;
+  const { body } = checked;
+  if (typeof body.client !== 'string' || !body.client) {
+    return c.html(messagePage({ heading: '缺少 client', text: '沒有指定要清除哪一個 client 的勾選。', link: { href: '/settings', text: '回到設定頁' } }), 400);
+  }
+  await forgetChoice(c.env.DB, body.client);
   return c.redirect('/settings', 302);
 });
 

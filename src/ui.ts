@@ -3,6 +3,7 @@
 // 專案專屬的版面只有稽核紀錄表，樣式在 public/app.css
 import { html } from 'hono/html';
 import type { AuditLog } from './audit';
+import type { ConsentChoice } from './consents';
 import type { AuthEvent, AuthEventType } from './events';
 import type { ServiceDefinition } from './services';
 
@@ -146,6 +147,8 @@ interface ConsentOptions {
   clientName: string;
   redirectUri: string;
   services: readonly ServiceDefinition[];
+  /** 預先勾選的範圍 */
+  checked: ReadonlySet<string>;
 }
 
 export function consentPage(o: ConsentOptions) {
@@ -178,7 +181,7 @@ export function consentPage(o: ConsentOptions) {
         (service) => html`<h3>${service.label}</h3>
       <div class="switches">${service.scopes.map(
         (s) =>
-          html`<label class="switch"><span><strong>${s.label}</strong><small>${s.scope}｜${s.description}</small></span><input type="checkbox" id="scope-${s.scope.replace(/[^a-z0-9]+/gi, '-')}" name="scope" value="${s.scope}"${s.defaultChecked ? html` checked` : ''}><i aria-hidden="true"></i></label>`,
+          html`<label class="switch"><span><strong>${s.label}</strong><small>${s.scope}｜${s.description}</small></span><input type="checkbox" id="scope-${s.scope.replace(/[^a-z0-9]+/gi, '-')}" name="scope" value="${s.scope}"${o.checked.has(s.scope) ? html` checked` : ''}><i aria-hidden="true"></i></label>`,
       )}</div>`,
       )}
       <div class="actions"><button class="btn" type="submit" name="action" value="approve">同意授權</button><button class="btn secondary" type="submit" name="action" value="deny">拒絕</button></div>
@@ -198,7 +201,35 @@ export interface GrantView {
   createdAt: string;
 }
 
-export function settingsPage(csrf: string, grants: GrantView[]) {
+/** 記住的勾選：撤銷授權後仍然保留，清除後下次授權回到服務的預設 */
+function rememberedCard(csrf: string, choices: ConsentChoice[], index: number) {
+  return card({
+    index,
+    id: 'remembered-title',
+    title: '記住的勾選',
+    desc: '重新授權時預先勾好，撤銷授權不會清掉',
+    accent: 'accent-violet',
+    content: choices.map(
+      (choice, i) => html`<h3>${choice.clientName || choice.clientId}</h3>
+    <ul class="badges" aria-label="上次勾選的權限">
+      ${choice.granted.length ? choice.granted.map((s) => html`<li class="badge is-pass">${s}</li>`) : html`<li class="badge">沒有勾選任何權限</li>`}
+    </ul>
+    <dl class="def-list">
+      <dt>client</dt><dd><code class="keys">${choice.clientId}</code></dd>
+      <dt>最近同意</dt><dd>${choice.updatedAt}</dd>
+      <dt>來源 IP</dt><dd>${choice.ip}</dd>
+      <dt>User-Agent</dt><dd>${choice.userAgent}</dd>
+    </dl>
+    <form class="panel" id="forget-${i + 1}-form" method="post" action="/settings/forget">
+      <input type="hidden" name="csrf" value="${csrf}">
+      <input type="hidden" name="client" value="${choice.clientId}">
+      <button class="btn secondary is-block" type="submit">清除記住的勾選</button>
+    </form>`,
+    ),
+  });
+}
+
+export function settingsPage(csrf: string, grants: GrantView[], choices: ConsentChoice[]) {
   const grantCards = grants.map((g, i) =>
     card({
       index: i + 1,
@@ -225,8 +256,9 @@ export function settingsPage(csrf: string, grants: GrantView[]) {
     accent: 'accent-blue',
     content: html`<p class="meta">目前沒有已授權的 client。把閘道的 /mcp 網址加進 AI client，它會開瀏覽器帶你走授權流程。</p>`,
   });
+  const remembered = choices.length ? rememberedCard(csrf, choices, Math.max(grants.length, 1) + 1) : '';
   const logout = card({
-    index: Math.max(grants.length, 1) + 1,
+    index: Math.max(grants.length, 1) + (choices.length ? 2 : 1),
     id: 'logout-title',
     title: '登出',
     desc: '結束這個瀏覽器的登入狀態',
@@ -241,7 +273,7 @@ export function settingsPage(csrf: string, grants: GrantView[]) {
     nav: 'grants',
     solid: '授權管理',
     lede: '撤銷後，client 的 token 立刻失效。',
-    cards: [grants.length ? grantCards : empty, logout],
+    cards: [grants.length ? grantCards : empty, remembered, logout],
     note: note('換密碼不會撤銷授權', '更換閘道密碼後，已發出的 token 仍然有效。懷疑密碼外流時，要在這裡把 client 逐一撤銷。', true),
   });
 }

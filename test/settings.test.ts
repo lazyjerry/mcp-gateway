@@ -157,6 +157,7 @@ describe('撤銷授權', () => {
     expect(await mcpStatus(victim.token)).toBe(401);
     expect((await listTools(reader.token)).length).toBeGreaterThan(0);
     const html = await page('/settings', writer.cookie);
-    expect(html).not.toContain(victim.clientId);
+    // 記住的勾選撤銷後仍保留，所以只看授權卡片
+    expect(html.split('<section').some((item) => item.includes('name="grant"') && item.includes(victim.clientId))).toBe(false);
   });
 });
