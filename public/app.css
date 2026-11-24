@@ -15,3 +15,8 @@
 
 /* 帳號與授權事件表：沿用稽核紀錄表，User-Agent 很長，允許換行 */
 .app-log .app-log-agent { display: inline-block; max-width: 28ch; white-space: normal; overflow-wrap: anywhere; }
+
+/* 導覽列的登出：表單按鈕排得跟 .site-nav 的連結一樣 */
+.app-nav-logout { display: contents; }
+.app-nav-logout button { padding: 6px var(--space-3); color: var(--ink); background: none; border: 2px solid transparent; font: inherit; font-size: var(--fs-sm); font-weight: var(--fw-heavy); cursor: pointer; }
+.app-nav-logout button:hover { border-color: var(--ink); }

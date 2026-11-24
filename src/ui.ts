@@ -16,8 +16,10 @@ type Accent = (typeof ACCENTS)[number];
 interface PageOptions {
   /** <title> 裡「MCP 閘道｜」後面的用途 */
   title: string;
-  /** 設定頁的導覽；登入與同意頁不顯示 */
-  nav?: 'grants' | 'logs';
+  /** 登入後頁面的導覽；登入與同意頁不顯示 */
+  nav?: 'grants' | 'logs' | 'account';
+  /** 有導覽列時必填：導覽列的登出按鈕要帶 */
+  csrf?: string;
   /** 大標：實心行講對象，描邊行講動作。有導覽列的頁面只用實心行，手機首屏才放得下 */
   solid: string;
   outline?: string;
@@ -33,6 +35,11 @@ function page(o: PageOptions) {
     ? html`<nav class="site-nav" aria-label="頁面">
         <a href="/settings" ${o.nav === 'grants' ? html`aria-current="page"` : ''}>授權</a>
         <a href="/settings/logs" ${o.nav === 'logs' ? html`aria-current="page"` : ''}>紀錄</a>
+        <a href="/settings/account" ${o.nav === 'account' ? html`aria-current="page"` : ''}>設定</a>
+        <form class="app-nav-logout" id="logout-form" method="post" action="/logout">
+          <input type="hidden" name="csrf" value="${o.csrf ?? ''}">
+          <button type="submit">登出</button>
+        </form>
       </nav>`
     : '';
   return html`<!doctype html>
@@ -288,7 +295,7 @@ function passkeysCard(csrf: string, passkeys: PasskeySummary[], index: number) {
   });
 }
 
-export function settingsPage(csrf: string, grants: GrantView[], choices: ConsentChoice[], passkeys: PasskeySummary[]) {
+export function settingsPage(csrf: string, grants: GrantView[], choices: ConsentChoice[]) {
   const grantCards = grants.map((g, i) =>
     card({
       index: i + 1,
@@ -317,25 +324,27 @@ export function settingsPage(csrf: string, grants: GrantView[], choices: Consent
     content: html`<p class="meta">目前沒有已授權的 client。把閘道的 /mcp 網址加進 AI client，它會開瀏覽器帶你走授權流程。</p>`,
   });
   const remembered = choices.length ? rememberedCard(csrf, choices, Math.max(grants.length, 1) + 1) : '';
-  const passkeyCard = passkeysCard(csrf, passkeys, Math.max(grants.length, 1) + (choices.length ? 2 : 1));
-  const logout = card({
-    index: Math.max(grants.length, 1) + (choices.length ? 3 : 2),
-    id: 'logout-title',
-    title: '登出',
-    desc: '結束這個瀏覽器的登入狀態',
-    accent: 'accent-green',
-    content: html`<form class="panel" id="logout-form" method="post" action="/logout">
-      <input type="hidden" name="csrf" value="${csrf}">
-      <button class="btn secondary is-block" type="submit">登出閘道</button>
-    </form>`,
-  });
   return page({
     title: '已授權的 client',
     nav: 'grants',
+    csrf,
     solid: '授權管理',
     lede: '撤銷後，client 的 token 立刻失效。',
-    cards: [grants.length ? grantCards : empty, remembered, passkeyCard, logout],
+    cards: [grants.length ? grantCards : empty, remembered],
     note: note('換密碼不會撤銷授權', '更換閘道密碼後，已發出的 token 仍然有效。懷疑密碼外流時，要在這裡把 client 逐一撤銷。', true),
+  });
+}
+
+/** 設定頁：閘道本身的登入方式。登出在導覽列 */
+export function accountPage(csrf: string, passkeys: PasskeySummary[]) {
+  return page({
+    title: '設定',
+    nav: 'account',
+    csrf,
+    solid: '設定',
+    lede: '管理這個閘道的登入方式。',
+    cards: [passkeysCard(csrf, passkeys, 1)],
+    note: note('Passkey 綁這個網址', '在 workers.dev 與自訂網域各自新增；換網域後要重新新增。密碼仍然可以登入。'),
   });
 }
 
@@ -380,10 +389,11 @@ function eventsCard(events: AuthEvent[]) {
   });
 }
 
-export function logsPage(logs: LogView[], events: AuthEvent[]) {
+export function logsPage(csrf: string, logs: LogView[], events: AuthEvent[]) {
   return page({
     title: '稽核紀錄',
     nav: 'logs',
+    csrf,
     solid: '稽核紀錄',
     lede: 'tool 呼叫與帳號操作，保留 30 天。',
     cards: [card({

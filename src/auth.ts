@@ -12,7 +12,7 @@ import { INSTANT_EVENTS, sendEventMail } from './mailer';
 import { loadServices, scopesOf } from './services';
 import { createSession, destroySession, readSession, safeEqual, type Session } from './session';
 import { clearAttempts, countAttempt, MAX_ATTEMPTS, sourceOf, WINDOW_SECONDS } from './throttle';
-import { consentPage, loginPage, logsPage, messagePage, settingsPage } from './ui';
+import { accountPage, consentPage, loginPage, logsPage, messagePage, settingsPage } from './ui';
 
 type AppEnv = { Bindings: Env & { OAUTH_PROVIDER: OAuthHelpers } };
 
@@ -198,10 +198,9 @@ authApp.post('/logout', async (c) => {
 authApp.get('/settings', async (c) => {
   const session = await readSession(c);
   if (!session) return c.redirect('/login?next=/settings', 302);
-  const [grants, choices, passkeys, services] = await Promise.all([
+  const [grants, choices, services] = await Promise.all([
     allGrants(c.env.OAUTH_PROVIDER),
     listChoices(c.env.DB),
-    listPasskeys(c.env.DB),
     loadServices(c.env),
   ]);
   const allScopes = scopesOf(services);
@@ -218,7 +217,6 @@ authApp.get('/settings', async (c) => {
         newScopes: unseenScopes(allScopes, choiceOf.get(g.clientId) ?? null, g.scope),
       })),
       choices,
-      passkeys,
     ),
   );
 });
@@ -254,7 +252,14 @@ authApp.get('/settings/logs', async (c) => {
   if (!session) return c.redirect('/login?next=/settings/logs', 302);
   const [logs, grants, events] = await Promise.all([listRecent(c.env.DB), allGrants(c.env.OAUTH_PROVIDER), listRecentEvents(c.env.DB)]);
   const names = new Map(grants.map((g) => [g.clientId, clientName(g)]));
-  return c.html(logsPage(logs.map((log) => ({ ...log, clientName: names.get(log.client_id) ?? '（已撤銷）' })), events));
+  return c.html(logsPage(session.csrf, logs.map((log) => ({ ...log, clientName: names.get(log.client_id) ?? '（已撤銷）' })), events));
+});
+
+// 設定頁：閘道本身的登入方式（Passkey）
+authApp.get('/settings/account', async (c) => {
+  const session = await readSession(c);
+  if (!session) return c.redirect('/login?next=/settings/account', 302);
+  return c.html(accountPage(session.csrf, await listPasskeys(c.env.DB)));
 });
 
 // Passkey：登入頁以 Passkey 換 Session；設定頁新增（要再輸入密碼）與刪除。
@@ -363,8 +368,8 @@ authApp.post('/settings/passkeys/delete', async (c) => {
   if (checked instanceof Response) return checked;
   const { body } = checked;
   if (typeof body.id !== 'string' || !body.id) {
-    return c.html(messagePage({ heading: '缺少 Passkey', text: '沒有指定要刪除哪一個 Passkey。', link: { href: '/settings', text: '回到設定頁' } }), 400);
+    return c.html(messagePage({ heading: '缺少 Passkey', text: '沒有指定要刪除哪一個 Passkey。', link: { href: '/settings/account', text: '回到設定頁' } }), 400);
   }
   if (await deletePasskey(c.env.DB, body.id)) await track(c, 'passkey_removed');
-  return c.redirect('/settings', 302);
+  return c.redirect('/settings/account', 302);
 });

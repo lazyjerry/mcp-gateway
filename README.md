@@ -237,15 +237,15 @@ cp wrangler.jsonc wrangler.local.jsonc        # 在 services 填入服務綁定�
 
 ### 管理已授權的 client
 
-登入 `https://<閘道網域>/settings`：
+登入 `https://<閘道網域>/settings`，頁面上方的導覽列切換「授權」「紀錄」「設定」：
 
 - **已授權的 client**：列出每個 client 的名稱、權限與授權時間。按「撤銷」後，那個 client 的 token 立刻失效。授權之後才新增的權限（例如新串的服務），卡片上會標「需要重新授權」並列出這些權限；同意頁列過但沒勾的權限不算。
 - **記住的勾選**：列出每個 client 上次勾選的權限、最近一次同意的時間、來源 IP 與 User-Agent。按「清除記住的勾選」後，那個 client 下次授權時同意頁回到服務的預設。
-- **Passkey**：列出已新增的 Passkey，可以逐一刪除。新增時要再輸入一次 `GATEWAY_PASS`，再用 Face ID、Touch ID 或裝置 PIN 驗證。新增之後，登入頁的「改用 Passkey 登入」才能用。
+- **Passkey**（「設定」，`/settings/account`）：列出已新增的 Passkey，可以逐一刪除。新增時要再輸入一次 `GATEWAY_PASS`，再用 Face ID、Touch ID 或裝置 PIN 驗證。新增之後，登入頁的「改用 Passkey 登入」才能用。
 - **稽核紀錄**（`/settings/logs`）：最近 200 筆 tool 呼叫，欄位是時間、client、tool、結果（`ok`／`forbidden`／`throttled`／`error`）、處理時間。保留 30 天。
 - **帳號與授權**（同一頁的第二張表）：最近 200 筆登入成功、登入失敗、登入被擋、登出、同意授權、拒絕授權、撤銷授權、新增 Passkey、刪除 Passkey，欄位是時間、事件、client、範圍、來源 IP 與 User-Agent。保留 30 天。
 - **通知信**（設定了 `MAIL_FROM` 與 `MAIL_TO` 才有）：登入成功、同意授權、撤銷授權、新增 Passkey、刪除 Passkey 每次寄一封；登入被擋時，同一個來源 IP 每 15 分鐘只寄一封。登入失敗、登出、拒絕授權不即時寄，每天 UTC 00:00（台灣 08:00）彙整過去 24 小時的次數與登入失敗的來源寄一封，沒有資料就不寄。
-- **登出**：頁面上方的按鈕。沒登出的話，登入狀態 12 小時後過期。
+- **登出**：導覽列的「登出」，每一頁都有。沒登出的話，登入狀態 12 小時後過期。
 
 ### 常見狀況
 

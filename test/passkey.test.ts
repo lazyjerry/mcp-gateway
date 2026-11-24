@@ -88,7 +88,7 @@ describe('新增 Passkey', () => {
   it('新增後設定頁列出名稱，紀錄頁有一筆新增 Passkey', async () => {
     await addPasskey('我的筆電');
     const { cookie } = await ownerSession();
-    const settings = await (await gw('/settings', { headers: { Cookie: cookie } })).text();
+    const settings = await (await gw('/settings/account', { headers: { Cookie: cookie } })).text();
     expect(settings).toContain('我的筆電');
     const logs = await (await gw('/settings/logs', { headers: { Cookie: cookie } })).text();
     expect(logs).toContain('新增 Passkey');
@@ -161,7 +161,7 @@ describe('刪除 Passkey', () => {
     const { cookie, csrf } = await ownerSession();
     const res = await gw('/settings/passkeys/delete', { method: 'POST', headers: { Cookie: cookie }, body: form({ csrf, id: authenticator.credentialId }) });
     expect(res.status).toBe(302);
-    expect(res.headers.get('Location')).toBe('/settings');
+    expect(res.headers.get('Location')).toBe('/settings/account');
     expect((await passkeyLogin(authenticator)).status).toBe(401);
     const logs = await (await gw('/settings/logs', { headers: { Cookie: cookie } })).text();
     expect(logs).toContain('刪除 Passkey');
