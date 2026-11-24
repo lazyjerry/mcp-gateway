@@ -175,3 +175,13 @@ describe('刪除 Passkey', () => {
     expect((await passkeyLogin(authenticator)).status).toBe(200);
   });
 });
+
+describe('瀏覽器端', () => {
+  // passkey.js 用 fetch 送 JSON；CSP 的 default-src 'none' 沒開 connect-src 時瀏覽器會擋下，顯示 Failed to fetch
+  it('CSP 允許同源的 fetch', async () => {
+    for (const path of ['/login', '/settings/account']) {
+      const csp = (await gw(path)).headers.get('Content-Security-Policy') ?? '';
+      expect(csp).toContain("connect-src 'self'");
+    }
+  });
+});
