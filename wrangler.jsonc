@@ -4,7 +4,7 @@
   "main": "src/index.ts",
   "compatibility_date": "2026-11-04",
   // 頁面用的元件庫（jerry-ui.css、jerry-ui.js、jerry.png）與 app.css。其餘路徑都交給 Worker
-  "assets": { "directory": "./public" },
+  "assets": { "directory": "./public", "binding": "ASSETS" },
   // 同帳號的服務走服務綁定 RPC；binding 名稱是服務名大寫，再把 binding 名稱列進 secret SERVICES。
   // 這份進版控、不含任何服務。複製成 wrangler.local.jsonc（不進版控）後在那一份填實際的服務：
   // "services": [{ "binding": "<服務名大寫>", "service": "<Worker 名稱>", "entrypoint": "<WorkerEntrypoint 類別名稱>" }],

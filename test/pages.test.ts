@@ -1,11 +1,20 @@
 // 頁面外框：登入、同意、設定、紀錄與提示訊息都套用同一套元件庫
+import { env } from 'cloudflare:test';
 import { describe, expect, it } from 'vitest';
 import { authorize, form, gw } from './helpers/oauth';
 
+function asset(path: string): Promise<Response> {
+  return env.ASSETS.fetch(`http://localhost${path}`);
+}
+
 function expectShell(html: string) {
   expect(html).toContain('<html lang="zh-Hant-TW">');
+  expect(html).toContain('<meta name="theme-color" content="#f5f3ed">');
+  expect(html).toContain('<link rel="manifest" href="/app.webmanifest">');
+  expect(html).toContain('<link rel="apple-touch-icon" href="/icon-180.png">');
   expect(html).toContain('<link rel="stylesheet" href="/jerry-ui.css">');
   expect(html).toContain('<script src="/jerry-ui.js" defer></script>');
+  expect(html).toContain('<script src="/app.js" defer></script>');
   expect(html).toContain('<img class="jerry-mark" src="/jerry.png" width="1" height="1" alt="" aria-hidden="true">');
   expect(html).not.toContain('<style');
   expect(html.match(/<h1/g)).toHaveLength(1);
@@ -29,7 +38,47 @@ describe('頁面外框', () => {
     expect(csp).toContain("style-src 'self'");
     expect(csp).toContain("script-src 'self'");
     expect(csp).toContain("img-src 'self'");
+    expect(csp).toContain("manifest-src 'self'");
+    expect(csp).toContain("worker-src 'self'");
     expect(csp).not.toContain('unsafe-inline');
+  });
+});
+
+describe('PWA', () => {
+  it('提供可安裝的 manifest 與 icon', async () => {
+    const res = await asset('/app.webmanifest');
+    expect(res.status).toBe(200);
+    expect(res.headers.get('Content-Type')).toContain('application/manifest+json');
+    const manifest = await res.json() as {
+      name: string;
+      start_url: string;
+      display: string;
+      icons: { src: string; sizes: string; purpose?: string }[];
+    };
+    expect(manifest.name).toBe('MCP 閘道');
+    expect(manifest.start_url).toBe('/settings');
+    expect(manifest.display).toBe('standalone');
+    expect(manifest.icons).toEqual(expect.arrayContaining([
+      expect.objectContaining({ src: '/icon-192.png', sizes: '192x192' }),
+      expect.objectContaining({ src: '/icon-512.png', sizes: '512x512', purpose: 'any maskable' }),
+    ]));
+    for (const path of ['/icon-180.png', '/icon-192.png', '/icon-512.png']) {
+      const icon = await asset(path);
+      expect(icon.status).toBe(200);
+      expect(icon.headers.get('Content-Type')).toBe('image/png');
+    }
+  });
+
+  it('提供離線頁與 service worker', async () => {
+    const offline = await asset('/offline.html');
+    expect(offline.status).toBe(200);
+    expect(await offline.text()).toContain('目前無法連線');
+
+    const worker = await asset('/sw.js');
+    expect(worker.status).toBe(200);
+    const source = await worker.text();
+    expect(source).toContain("event.request.mode === 'navigate'");
+    expect(source).toContain("caches.match('/offline.html')");
   });
 });
 

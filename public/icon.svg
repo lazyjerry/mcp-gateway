@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" role="img" aria-labelledby="title">
+  <title id="title">MCP 閘道</title>
+  <rect width="1024" height="1024" fill="#f5f3ed"/>
+  <path d="M208 512H108M916 512H816M512 208V108M512 916V816" stroke="#171e34" stroke-width="48"/>
+  <circle cx="108" cy="512" r="52" fill="#2679b9" stroke="#171e34" stroke-width="28"/>
+  <circle cx="916" cy="512" r="52" fill="#398a70" stroke="#171e34" stroke-width="28"/>
+  <circle cx="512" cy="108" r="52" fill="#7652ca" stroke="#171e34" stroke-width="28"/>
+  <circle cx="512" cy="916" r="52" fill="#ed735f" stroke="#171e34" stroke-width="28"/>
+  <rect x="208" y="208" width="608" height="608" rx="96" fill="#171e34"/>
+  <path d="M328 690V334h88l96 134 96-134h88v356h-96V486l-88 120-88-120v204z" fill="#fffefa"/>
+  <path d="M304 714h416" stroke="#ed735f" stroke-width="36"/>
+</svg>

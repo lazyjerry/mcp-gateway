@@ -52,7 +52,7 @@ authApp.use('*', async (c, next) => {
   c.header('X-Frame-Options', 'DENY');
   c.header('Referrer-Policy', 'no-referrer');
   // 樣式、腳本、圖片只收同源的檔案（public/ 的元件庫），不允許內嵌。不設 form-action：同意後要導回 client 的 redirect_uri，瀏覽器會把那次導向也算進去
-  c.header('Content-Security-Policy', "default-src 'none'; style-src 'self'; script-src 'self'; img-src 'self'; base-uri 'none'; frame-ancestors 'none'");
+  c.header('Content-Security-Policy', "default-src 'none'; style-src 'self'; script-src 'self'; img-src 'self'; manifest-src 'self'; worker-src 'self'; base-uri 'none'; frame-ancestors 'none'");
   c.header('X-Content-Type-Options', 'nosniff');
   // 頁面帶 CSRF token 與授權清單，不留在快取
   c.header('Cache-Control', 'no-store');

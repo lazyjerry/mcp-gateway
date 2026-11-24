@@ -40,10 +40,14 @@ function page(o: PageOptions) {
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
+<meta name="theme-color" content="#f5f3ed">
 <title>MCP 閘道｜${o.title}</title>
+<link rel="manifest" href="/app.webmanifest">
+<link rel="apple-touch-icon" href="/icon-180.png">
 <link rel="stylesheet" href="/jerry-ui.css">
 <link rel="stylesheet" href="/app.css">
 <script src="/jerry-ui.js" defer></script>
+<script src="/app.js" defer></script>
 </head>
 <body>
 <a class="skip-link" href="#main">跳到主要內容</a>
