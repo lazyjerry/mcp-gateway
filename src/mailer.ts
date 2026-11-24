@@ -4,7 +4,7 @@ import type { AuthEventClient, AuthEventType } from './events';
 import { EVENT_LABELS } from './ui';
 
 /** 發生當下就寄的事件；登入被擋由呼叫端決定（每個來源每個時間窗一封） */
-export const INSTANT_EVENTS: ReadonlySet<AuthEventType> = new Set(['login', 'grant_approved', 'grant_revoked']);
+export const INSTANT_EVENTS: ReadonlySet<AuthEventType> = new Set(['login', 'grant_approved', 'grant_revoked', 'passkey_added', 'passkey_removed']);
 
 /** 不即時寄、每天彙整一封的事件 */
 export const DIGEST_EVENTS = ['login_failed', 'logout', 'grant_denied'] as const satisfies readonly AuthEventType[];

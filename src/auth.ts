@@ -4,6 +4,10 @@ import { Hono, type Context } from 'hono';
 import { listRecent } from './audit';
 import { findChoice, forgetChoice, listChoices, presetScopes, rememberChoice, unseenScopes } from './consents';
 import { listRecentEvents, recordEvent, type AuthEventClient, type AuthEventType } from './events';
+import type { AuthenticationResponseJSON, RegistrationResponseJSON } from '@simplewebauthn/server';
+import {
+  authenticatePasskey, authenticationOptions, deletePasskey, listPasskeys, PasskeyError, registerPasskey, registrationOptions,
+} from './passkeys';
 import { INSTANT_EVENTS, sendEventMail } from './mailer';
 import { loadServices, scopesOf } from './services';
 import { createSession, destroySession, readSession, safeEqual, type Session } from './session';
@@ -194,9 +198,10 @@ authApp.post('/logout', async (c) => {
 authApp.get('/settings', async (c) => {
   const session = await readSession(c);
   if (!session) return c.redirect('/login?next=/settings', 302);
-  const [grants, choices, services] = await Promise.all([
+  const [grants, choices, passkeys, services] = await Promise.all([
     allGrants(c.env.OAUTH_PROVIDER),
     listChoices(c.env.DB),
+    listPasskeys(c.env.DB),
     loadServices(c.env),
   ]);
   const allScopes = scopesOf(services);
@@ -213,6 +218,7 @@ authApp.get('/settings', async (c) => {
         newScopes: unseenScopes(allScopes, choiceOf.get(g.clientId) ?? null, g.scope),
       })),
       choices,
+      passkeys,
     ),
   );
 });
@@ -249,4 +255,116 @@ authApp.get('/settings/logs', async (c) => {
   const [logs, grants, events] = await Promise.all([listRecent(c.env.DB), allGrants(c.env.OAUTH_PROVIDER), listRecentEvents(c.env.DB)]);
   const names = new Map(grants.map((g) => [g.clientId, clientName(g)]));
   return c.html(logsPage(logs.map((log) => ({ ...log, clientName: names.get(log.client_id) ?? '（已撤銷）' })), events));
+});
+
+// Passkey：登入頁以 Passkey 換 Session；設定頁新增（要再輸入密碼）與刪除。
+// 瀏覽器端在 public/passkey.js，選項與回應走 JSON；限定 application/json，跨站的表單送不進來
+
+type JsonResult = Response | Record<string, unknown>;
+
+async function readJson(c: Context<AppEnv>): Promise<JsonResult> {
+  if (!(c.req.header('Content-Type') ?? '').startsWith('application/json')) return c.json({ error: '請以 JSON 送出' }, 415);
+  try {
+    const body = await c.req.json();
+    return body && typeof body === 'object' ? (body as Record<string, unknown>) : c.json({ error: '格式不正確' }, 400);
+  } catch {
+    return c.json({ error: '格式不正確' }, 400);
+  }
+}
+
+/** 設定頁的 JSON 請求：要已登入，CSRF token 放在 X-CSRF-Token 標頭 */
+async function checkedJson(c: Context<AppEnv>): Promise<JsonResult> {
+  const session = await readSession(c);
+  if (!session) return c.json({ error: '登入狀態已經過期，請重新登入' }, 401);
+  const csrf = c.req.header('X-CSRF-Token') ?? '';
+  if (!(await safeEqual(csrf, session.csrf))) return c.json({ error: '頁面已經過期，請重新整理後再試' }, 403);
+  return readJson(c);
+}
+
+function passkeyFailure(c: Context<AppEnv>, err: unknown, status: 400 | 401) {
+  if (err instanceof PasskeyError) return c.json({ error: err.message }, status);
+  throw err;
+}
+
+authApp.post('/login/passkey/options', async (c) => {
+  const body = await readJson(c);
+  if (body instanceof Response) return body;
+  try {
+    return c.json(await authenticationOptions(c.env.DB, c.req.url));
+  } catch (err) {
+    return passkeyFailure(c, err, 400);
+  }
+});
+
+authApp.post('/login/passkey', async (c) => {
+  const body = await readJson(c);
+  if (body instanceof Response) return body;
+  // 跟密碼登入共用節流：先佔一次名額再驗
+  const source = sourceOf(c.req.raw);
+  const attempt = await countAttempt(c.env.DB, source);
+  if (attempt > MAX_ATTEMPTS) {
+    await track(c, 'login_blocked', undefined, attempt === MAX_ATTEMPTS + 1);
+    c.header('Retry-After', String(WINDOW_SECONDS));
+    return c.json({ error: `登入失敗次數過多，請 ${WINDOW_SECONDS / 60} 分鐘後再試` }, 429);
+  }
+  const response = body.response;
+  if (!response || typeof response !== 'object' || typeof (response as { id?: unknown }).id !== 'string') {
+    await track(c, 'login_failed');
+    return c.json({ error: '缺少 Passkey 回應' }, 400);
+  }
+  try {
+    await authenticatePasskey(c.env.DB, c.req.url, response as AuthenticationResponseJSON);
+  } catch (err) {
+    if (err instanceof PasskeyError) await track(c, 'login_failed');
+    return passkeyFailure(c, err, 401);
+  }
+  await clearAttempts(c.env.DB, source);
+  await createSession(c);
+  await track(c, 'login');
+  return c.json({ redirect: safeNext(body.next) });
+});
+
+// 新增 Passkey 等於多一種登入方式，要再輸入目前的密碼；猜密碼一樣受節流
+authApp.post('/settings/passkeys/options', async (c) => {
+  const body = await checkedJson(c);
+  if (body instanceof Response) return body;
+  const source = sourceOf(c.req.raw);
+  const attempt = await countAttempt(c.env.DB, source);
+  if (attempt > MAX_ATTEMPTS) {
+    c.header('Retry-After', String(WINDOW_SECONDS));
+    return c.json({ error: `密碼錯誤次數過多，請 ${WINDOW_SECONDS / 60} 分鐘後再試` }, 429);
+  }
+  const expected = c.env.GATEWAY_PASS;
+  if (typeof body.password !== 'string' || !expected || !(await safeEqual(body.password, expected))) {
+    return c.json({ error: '密碼不正確' }, 401);
+  }
+  await clearAttempts(c.env.DB, source);
+  return c.json(await registrationOptions(c.env.DB, c.req.url));
+});
+
+authApp.post('/settings/passkeys', async (c) => {
+  const body = await checkedJson(c);
+  if (body instanceof Response) return body;
+  const response = body.response;
+  if (!response || typeof response !== 'object' || typeof (response as { id?: unknown }).id !== 'string') {
+    return c.json({ error: '缺少 Passkey 回應' }, 400);
+  }
+  try {
+    await registerPasskey(c.env.DB, c.req.url, response as RegistrationResponseJSON, typeof body.name === 'string' ? body.name : '');
+    await track(c, 'passkey_added');
+  } catch (err) {
+    return passkeyFailure(c, err, 400);
+  }
+  return c.json({ ok: true }, 201);
+});
+
+authApp.post('/settings/passkeys/delete', async (c) => {
+  const checked = await checkedForm(c);
+  if (checked instanceof Response) return checked;
+  const { body } = checked;
+  if (typeof body.id !== 'string' || !body.id) {
+    return c.html(messagePage({ heading: '缺少 Passkey', text: '沒有指定要刪除哪一個 Passkey。', link: { href: '/settings', text: '回到設定頁' } }), 400);
+  }
+  if (await deletePasskey(c.env.DB, body.id)) await track(c, 'passkey_removed');
+  return c.redirect('/settings', 302);
 });

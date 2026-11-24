@@ -56,9 +56,9 @@ AI client ──OAuth / MCP──▶ MCP 閘道 Worker（<閘道網域>）
 
 ```
 wrangler.jsonc          通用設定（Deploy Button 與測試用）：kv_namespaces（OAUTH_KV）、d1_databases（DB）、assets（public/）；不含服務，複製成 wrangler.local.jsonc 後填服務綁定
-migrations/             閘道 D1：稽核紀錄、登入失敗計數、帳號與授權事件、tool 頻率限制、記住的勾選
+migrations/             閘道 D1：稽核紀錄、登入失敗計數、帳號與授權事件、tool 頻率限制、記住的勾選、Passkey
 src/index.ts            OAuthProvider 的 default export，組合 auth 與 mcp
-src/auth.ts             登入、登出、同意頁、設定頁（授權列表、撤銷、記住的勾選、稽核紀錄）的路由
+src/auth.ts             登入（密碼、Passkey）、登出、同意頁、設定頁（授權列表、撤銷、記住的勾選、Passkey、稽核紀錄）的路由
 src/ui.ts               上面這些頁面與提示訊息的標記，結構照 Jerry UI 元件規格
 public/                 頁面用的靜態檔：jerry-ui.css、jerry-ui.js、jerry.png（元件庫，整檔不改）、app.css（稽核紀錄表）
 src/session.ts          閘道自己的登入 Session，只用在授權頁與設定頁
@@ -66,7 +66,8 @@ src/throttle.ts         登入失敗節流、tool 的頻率限制
 src/mcp.ts              MCP server：依 token 範圍組出 tools
 src/permissions.ts      權限判斷的唯一來源（tools/list 與 tools/call 共用）
 src/audit.ts            稽核紀錄的寫入與保留
-src/events.ts           帳號與授權事件（登入、登出、同意、拒絕、撤銷）的寫入與保留
+src/events.ts           帳號與授權事件（登入、登出、同意、拒絕、撤銷、新增與刪除 Passkey）的寫入與保留
+src/passkeys.ts         Passkey（WebAuthn）的新增、登入驗證、刪除；瀏覽器端在 public/passkey.js
 src/mailer.ts           通知信：即時通知與每日統計信
 src/consents.ts         記住同意頁的勾選，算出重新授權時要預先勾選的範圍
 src/services/index.ts   讀 SERVICES、呼叫各服務的 describe() 與 call()、檢查回傳形狀與名稱前綴
@@ -171,7 +172,7 @@ cp wrangler.jsonc wrangler.local.jsonc        # 在 services 填入服務綁定�
 
 - `SERVICES` 沒設定時閘道照常運作，只是沒有任何 tool，同意頁也沒有權限可勾。
 - **通知信**走 Email Routing：`MAIL_FROM` 的網域要啟用 Email Routing，`MAIL_TO` 的每個地址都要加進 Destination addresses 並點過驗證信。兩個任一個沒設定就不寄信，其他功能不受影響。確認方式：登入一次設定頁，紀錄頁出現「登入成功」，信箱收到同名的通知信；沒收到時看 `npx wrangler tail` 裡的 `mail failed`。
-- **自訂網域**（選用）：在 Cloudflare 後台替 Worker 綁定。換網域後 OAuth 的網址跟著變，所有 client 要重新授權。日後若加入 Passkey 登入，Passkey 也綁這個 hostname，換網域就要重新註冊。
+- **自訂網域**（選用）：在 Cloudflare 後台替 Worker 綁定。換網域後 OAuth 的網址跟著變，所有 client 要重新授權。Passkey 也綁 hostname：在 `workers.dev` 與自訂網域要各自新增，換網域後要重新新增。
 - **關掉用不到的網址**（建議）：綁好自訂網域後，在 Worker 的 Settings → Domains & Routes 關掉 `workers.dev` 與 Preview URLs，只留一個入口。
 
 ### 範例：串接書籤服務
@@ -222,7 +223,7 @@ cp wrangler.jsonc wrangler.local.jsonc        # 在 services 填入服務綁定�
 
 ### 第一次授權
 
-1. client 連上 `/mcp` 後會開瀏覽器到閘道的登入頁，輸入 `GATEWAY_PASS`。
+1. client 連上 `/mcp` 後會開瀏覽器到閘道的登入頁，輸入 `GATEWAY_PASS`，或按「改用 Passkey 登入」。
 2. 同意頁列出這個 client 的名稱、同意後會導回的網址，以及可勾選的權限。名稱是 client 自己填的，**以導回的網址為準**，不認得就按拒絕。
 3. 勾選要給的權限後按同意。權限依服務分組，每一項的名稱、說明與預設有沒有勾選，都由該服務宣告；通常只有查詢類預設勾選。
 
@@ -240,9 +241,10 @@ cp wrangler.jsonc wrangler.local.jsonc        # 在 services 填入服務綁定�
 
 - **已授權的 client**：列出每個 client 的名稱、權限與授權時間。按「撤銷」後，那個 client 的 token 立刻失效。授權之後才新增的權限（例如新串的服務），卡片上會標「需要重新授權」並列出這些權限；同意頁列過但沒勾的權限不算。
 - **記住的勾選**：列出每個 client 上次勾選的權限、最近一次同意的時間、來源 IP 與 User-Agent。按「清除記住的勾選」後，那個 client 下次授權時同意頁回到服務的預設。
+- **Passkey**：列出已新增的 Passkey，可以逐一刪除。新增時要再輸入一次 `GATEWAY_PASS`，再用 Face ID、Touch ID 或裝置 PIN 驗證。新增之後，登入頁的「改用 Passkey 登入」才能用。
 - **稽核紀錄**（`/settings/logs`）：最近 200 筆 tool 呼叫，欄位是時間、client、tool、結果（`ok`／`forbidden`／`throttled`／`error`）、處理時間。保留 30 天。
-- **帳號與授權**（同一頁的第二張表）：最近 200 筆登入成功、登入失敗、登入被擋、登出、同意授權、拒絕授權、撤銷授權，欄位是時間、事件、client、範圍、來源 IP 與 User-Agent。保留 30 天。
-- **通知信**（設定了 `MAIL_FROM` 與 `MAIL_TO` 才有）：登入成功、同意授權、撤銷授權每次寄一封；登入被擋時，同一個來源 IP 每 15 分鐘只寄一封。登入失敗、登出、拒絕授權不即時寄，每天 UTC 00:00（台灣 08:00）彙整過去 24 小時的次數與登入失敗的來源寄一封，沒有資料就不寄。
+- **帳號與授權**（同一頁的第二張表）：最近 200 筆登入成功、登入失敗、登入被擋、登出、同意授權、拒絕授權、撤銷授權、新增 Passkey、刪除 Passkey，欄位是時間、事件、client、範圍、來源 IP 與 User-Agent。保留 30 天。
+- **通知信**（設定了 `MAIL_FROM` 與 `MAIL_TO` 才有）：登入成功、同意授權、撤銷授權、新增 Passkey、刪除 Passkey 每次寄一封；登入被擋時，同一個來源 IP 每 15 分鐘只寄一封。登入失敗、登出、拒絕授權不即時寄，每天 UTC 00:00（台灣 08:00）彙整過去 24 小時的次數與登入失敗的來源寄一封，沒有資料就不寄。
 - **登出**：頁面上方的按鈕。沒登出的話，登入狀態 12 小時後過期。
 
 ### 常見狀況
@@ -260,8 +262,8 @@ cp wrangler.jsonc wrangler.local.jsonc        # 在 services 填入服務綁定�
 
 ## 安全
 
-- **登入**：閘道有自己的密碼登入（`GATEWAY_PASS`，等時比較）；沒設定時整個授權流程回 503。Passkey 登入列在後續規劃。
-- **登入失敗節流**：每個來源 IP 15 分鐘內最多驗 5 次密碼，計數存閘道的 D1。
+- **登入**：閘道有自己的密碼登入（`GATEWAY_PASS`，等時比較）；沒設定時整個授權流程回 503。另可用 Passkey 登入（WebAuthn，RP ID 是請求的 hostname，要求使用者驗證），challenge 存 D1、只能兌換一次、5 分鐘內有效；新增 Passkey 要已登入並再輸入密碼。
+- **登入失敗節流**：每個來源 IP 15 分鐘內最多驗 5 次密碼，Passkey 登入與新增 Passkey 時的密碼確認共用同一個計數，存閘道的 D1。
 - **`/mcp` 的驗證**：只認 OAuth access token，不認登入 Cookie。
 - **權限檢查兩次**：`tools/list` 依範圍過濾，`tools/call` 執行前再檢查一次。
 - **服務之間的隔離**：服務只能宣告自己名稱開頭的 tool 與範圍，回傳的形狀不對整個服務就不採用。`SERVICES` 與服務綁定都只有部署的人改得到。

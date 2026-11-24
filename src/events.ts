@@ -1,9 +1,10 @@
-// 帳號與授權事件：擁有者在閘道上的操作（登入、登出、同意、拒絕、撤銷）各記一筆，存在閘道自己的 D1。
+// 帳號與授權事件：擁有者在閘道上的操作（登入、登出、同意、拒絕、撤銷、新增與刪除 Passkey）各記一筆，存在閘道自己的 D1。
 // 記來源 IP 與 User-Agent，不記密碼、token、授權碼
 import { RETENTION_DAYS } from './audit';
 import { sourceOf } from './throttle';
 
-export type AuthEventType = 'login' | 'login_failed' | 'login_blocked' | 'logout' | 'grant_approved' | 'grant_denied' | 'grant_revoked';
+export type AuthEventType = 'login' | 'login_failed' | 'login_blocked' | 'logout' | 'grant_approved' | 'grant_denied' | 'grant_revoked'
+  | 'passkey_added' | 'passkey_removed';
 
 /** 授權事件才有的欄位 */
 export interface AuthEventClient {

@@ -5,6 +5,7 @@ import { html } from 'hono/html';
 import type { AuditLog } from './audit';
 import type { ConsentChoice } from './consents';
 import type { AuthEvent, AuthEventType } from './events';
+import type { PasskeySummary } from './passkeys';
 import type { ServiceDefinition } from './services';
 
 type Content = ReturnType<typeof html> | string | Content[];
@@ -125,7 +126,12 @@ export function loginPage(next: string, error?: string) {
       </div>
       <button class="btn is-block" type="submit">登入閘道<span class="btn-arrow" aria-hidden="true">→</span></button>
       ${error ? html`<p class="status is-error" id="login-status" role="alert">${error}</p>` : html`<p class="status" id="login-status" role="status"></p>`}
-    </form>`,
+    </form>
+    <div class="panel" id="passkey-panel" data-next="${next}" hidden>
+      <button class="btn secondary is-block" type="button" id="passkey-login">改用 Passkey 登入</button>
+      <p class="status" id="passkey-status" role="status"></p>
+    </div>
+    <script src="/passkey.js" defer></script>`,
       }),
       card({
         index: 2,
@@ -244,7 +250,45 @@ function rememberedCard(csrf: string, choices: ConsentChoice[], index: number) {
   });
 }
 
-export function settingsPage(csrf: string, grants: GrantView[], choices: ConsentChoice[]) {
+/** Passkey：列出已新增的、刪除，以及新增一把（瀏覽器端在 public/passkey.js） */
+function passkeysCard(csrf: string, passkeys: PasskeySummary[], index: number) {
+  return card({
+    index,
+    id: 'passkeys-title',
+    title: 'Passkey',
+    desc: '用 Face ID、Touch ID 或裝置 PIN 登入，只能用在這個網址',
+    accent: 'accent-coral',
+    content: html`${passkeys.map(
+      (p, i) => html`<h3>${p.name}</h3>
+    <dl class="def-list">
+      <dt>新增時間</dt><dd>${p.createdAt}</dd>
+      <dt>最近使用</dt><dd>${p.lastUsedAt ?? '還沒用過'}</dd>
+      <dt>同步</dt><dd>${p.synced ? '會同步到其他裝置' : '只在這台裝置'}</dd>
+    </dl>
+    <form class="panel" id="passkey-delete-${i + 1}-form" method="post" action="/settings/passkeys/delete">
+      <input type="hidden" name="csrf" value="${csrf}">
+      <input type="hidden" name="id" value="${p.id}">
+      <button class="btn secondary is-block" type="submit">刪除這個 Passkey</button>
+    </form>`,
+    )}
+    <form class="panel" id="passkey-add-form" hidden>
+      <input type="hidden" name="csrf" value="${csrf}">
+      <div class="field">
+        <label for="passkey-name">名稱</label>
+        <input id="passkey-name" name="name" maxlength="60" placeholder="例如：我的筆電">
+      </div>
+      <div class="field">
+        <label for="passkey-password">目前的密碼</label>
+        <input id="passkey-password" type="password" name="password" autocomplete="current-password" required>
+      </div>
+      <button class="btn is-block" type="submit">新增 Passkey</button>
+      <p class="status" id="passkey-add-status" role="status"></p>
+    </form>
+    <script src="/passkey.js" defer></script>`,
+  });
+}
+
+export function settingsPage(csrf: string, grants: GrantView[], choices: ConsentChoice[], passkeys: PasskeySummary[]) {
   const grantCards = grants.map((g, i) =>
     card({
       index: i + 1,
@@ -273,8 +317,9 @@ export function settingsPage(csrf: string, grants: GrantView[], choices: Consent
     content: html`<p class="meta">目前沒有已授權的 client。把閘道的 /mcp 網址加進 AI client，它會開瀏覽器帶你走授權流程。</p>`,
   });
   const remembered = choices.length ? rememberedCard(csrf, choices, Math.max(grants.length, 1) + 1) : '';
+  const passkeyCard = passkeysCard(csrf, passkeys, Math.max(grants.length, 1) + (choices.length ? 2 : 1));
   const logout = card({
-    index: Math.max(grants.length, 1) + (choices.length ? 2 : 1),
+    index: Math.max(grants.length, 1) + (choices.length ? 3 : 2),
     id: 'logout-title',
     title: '登出',
     desc: '結束這個瀏覽器的登入狀態',
@@ -289,7 +334,7 @@ export function settingsPage(csrf: string, grants: GrantView[], choices: Consent
     nav: 'grants',
     solid: '授權管理',
     lede: '撤銷後，client 的 token 立刻失效。',
-    cards: [grants.length ? grantCards : empty, remembered, logout],
+    cards: [grants.length ? grantCards : empty, remembered, passkeyCard, logout],
     note: note('換密碼不會撤銷授權', '更換閘道密碼後，已發出的 token 仍然有效。懷疑密碼外流時，要在這裡把 client 逐一撤銷。', true),
   });
 }
@@ -307,6 +352,8 @@ export const EVENT_LABELS: Record<AuthEventType, { text: string; tone: 'ok' | 'f
   grant_approved: { text: '同意授權', tone: 'ok' },
   grant_denied: { text: '拒絕授權', tone: 'plain' },
   grant_revoked: { text: '撤銷授權', tone: 'forbidden' },
+  passkey_added: { text: '新增 Passkey', tone: 'forbidden' },
+  passkey_removed: { text: '刪除 Passkey', tone: 'plain' },
 };
 
 function eventsCard(events: AuthEvent[]) {
