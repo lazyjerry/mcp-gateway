@@ -103,3 +103,9 @@ export function presetScopes(scopes: readonly ScopeDefinition[], choice: Consent
   const granted = new Set(choice?.granted);
   return new Set(scopes.filter((s) => (offered.has(s.scope) ? granted.has(s.scope) : s.defaultChecked)).map((s) => s.scope));
 }
+
+/** 授權之後才新增、同意頁還沒列過的範圍；有這些範圍就要重新授權。沒有紀錄時拿授權的範圍來比 */
+export function unseenScopes(all: Iterable<string>, choice: ConsentChoice | null, granted: readonly string[]): string[] {
+  const seen = new Set(choice ? choice.offered : granted);
+  return [...all].filter((s) => !seen.has(s));
+}

@@ -230,7 +230,7 @@ cp wrangler.jsonc wrangler.local.jsonc        # 在 services 填入服務綁定�
 
 上圖是本機的閘道接 repo 內的範例服務 `notes`，用 MCP Inspector 走一次授權：同意頁只勾「查詢記事」，連上後 `tools/list` 只看得到 `notes_list`、`notes_get`，看不到需要 `notes:write` 的 `notes_add`。
 
-授權的有效期是 30 天，到期後 client 會再開一次瀏覽器。要改權限就撤銷後重新授權。
+授權的有效期是 30 天，到期後 client 會再開一次瀏覽器。要改權限就從 client 重新授權（例如 Claude Code 的 `/mcp` 選該 server 重新驗證），同意後會取代這個 client 原本的授權，不必先撤銷；在同意頁按拒絕則保留原本的授權。
 
 重新授權時，同意頁會照這個 client 上次的勾選預先勾好；上次沒列出的權限（例如新串的服務）照服務的預設。撤銷授權不會清掉上次的勾選，要回到預設就到設定頁清除。client 重新註冊、換了 client_id 時，當成第一次授權。
 
@@ -238,7 +238,7 @@ cp wrangler.jsonc wrangler.local.jsonc        # 在 services 填入服務綁定�
 
 登入 `https://<閘道網域>/settings`：
 
-- **已授權的 client**：列出每個 client 的名稱、權限與授權時間。按「撤銷」後，那個 client 的 token 立刻失效。
+- **已授權的 client**：列出每個 client 的名稱、權限與授權時間。按「撤銷」後，那個 client 的 token 立刻失效。授權之後才新增的權限（例如新串的服務），卡片上會標「需要重新授權」並列出這些權限；同意頁列過但沒勾的權限不算。
 - **記住的勾選**：列出每個 client 上次勾選的權限、最近一次同意的時間、來源 IP 與 User-Agent。按「清除記住的勾選」後，那個 client 下次授權時同意頁回到服務的預設。
 - **稽核紀錄**（`/settings/logs`）：最近 200 筆 tool 呼叫，欄位是時間、client、tool、結果（`ok`／`forbidden`／`throttled`／`error`）、處理時間。保留 30 天。
 - **帳號與授權**（同一頁的第二張表）：最近 200 筆登入成功、登入失敗、登入被擋、登出、同意授權、拒絕授權、撤銷授權，欄位是時間、事件、client、範圍、來源 IP 與 User-Agent。保留 30 天。
@@ -251,7 +251,7 @@ cp wrangler.jsonc wrangler.local.jsonc        # 在 services 填入服務綁定�
 |---|---|
 | 登入頁、設定頁回 503 | 還沒設定 `GATEWAY_PASS`，照〈部署〉設定 `GATEWAY_PASS` |
 | 登入回 429「密碼錯誤次數過多」 | 同一個來源 IP 15 分鐘內試了超過 5 次。等 15 分鐘，或執行 `npx wrangler d1 execute mcp-gateway --remote --command "DELETE FROM login_attempts"` 清掉計數 |
-| AI 說沒有某個 tool，或回「沒有…的授權範圍」 | 授權時沒勾對應的權限。到設定頁撤銷，讓 client 重新授權 |
+| AI 說沒有某個 tool，或回「沒有…的授權範圍」 | 授權時沒勾對應的權限，或權限是授權之後才新增的。讓 client 重新授權並勾選 |
 | AI 完全沒有 tool，同意頁沒有任何權限可勾 | `SERVICES` 沒設定、binding 名稱與 wrangler 設定的 `services` 對不上，或服務的 `describe()` 失敗。看 `npx wrangler tail` 裡的 `service binding missing`、`service manifest invalid`、`service describe failed` |
 | 某個服務少了幾個 tool 或權限 | 名稱不是該服務名稱開頭，被閘道丟掉。log 有 `service manifest entries dropped` |
 | 稽核紀錄出現 `forbidden` | 有 client 呼叫了它沒被授權的 tool；呼叫沒有執行 |

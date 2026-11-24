@@ -145,7 +145,7 @@ npm run typecheck
 
 1. 部署服務（帶著 `describe()` 與 `call()`）。
 2. 閘道：`wrangler.local.jsonc` 加服務綁定，`npx wrangler secret put SERVICES -c wrangler.local.jsonc`，再 `npm run deploy`。
-3. 已授權的 client 不會自動得到新服務的範圍：到設定頁撤銷，讓 client 重新授權並勾選。同意頁會照上次的勾選預先勾好舊服務的範圍，新服務的範圍照 `defaultChecked`。
+3. 已授權的 client 不會自動得到新服務的範圍，設定頁會在它的卡片上標「需要重新授權」：讓 client 重新授權並勾選，同意後取代原本的授權，不必先撤銷。同意頁會照上次的勾選預先勾好舊服務的範圍，新服務的範圍照 `defaultChecked`。
 
 ## 修改既有的串接
 
@@ -157,9 +157,9 @@ tool 與範圍都在服務端，**大部分的修改只要部署服務**，閘�
 | 改 tool 的參數或說明 | 改 `describe()` 與驗證，部署 | 不用動 | client 可能還留著舊的 tool 清單，重新連線後才更新 |
 | 改 tool 的名稱 | 改 `describe()` 與 `call()`，部署 | 不用動 | 等於移除舊 tool 再加新 tool；稽核紀錄裡舊名稱的紀錄不會跟著改 |
 | 拿掉一個 tool | 從 `describe()` 拿掉；`call()` 對這個名稱回 `ok: false` | 不用動 | tool 從 `tools/list` 消失 |
-| 加一個授權範圍 | `describe()` 的 `scopes` 加一筆，tool 的 `scopes` 對上，部署 | 不用動 | 要撤銷後重新授權才勾得到；同意頁上這個範圍照 `defaultChecked`，其他範圍照上次的勾選 |
+| 加一個授權範圍 | `describe()` 的 `scopes` 加一筆，tool 的 `scopes` 對上，部署 | 不用動 | 設定頁標「需要重新授權」，重新授權才勾得到；同意頁上這個範圍照 `defaultChecked`，其他範圍照上次的勾選 |
 | 把 tool 換到另一個範圍 | 改 tool 的 `scopes`，部署 | 不用動 | 一分鐘內生效：沒有新範圍的 client 失去這個 tool |
-| 改名或拿掉一個範圍 | 改 `describe()`，部署 | 不用動 | 已授權的 token 仍帶著舊的範圍字串，對不上任何 tool；要撤銷後重新授權 |
+| 改名或拿掉一個範圍 | 改 `describe()`，部署 | 不用動 | 已授權的 token 仍帶著舊的範圍字串，對不上任何 tool；設定頁標「需要重新授權」，重新授權即可 |
 | 改 Worker 名稱或 entrypoint 名稱 | 以新名稱部署，舊的保留到閘道切換完 | 改 `wrangler.local.jsonc` 的 `services`，部署 | 無 |
 | 改服務名稱（binding） | 所有 tool 與範圍換前綴，部署 | 改 `wrangler.local.jsonc` 與 `SERVICES`，部署 | 等於換了一個服務：全部要重新授權 |
 

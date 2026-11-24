@@ -203,6 +203,17 @@ export interface GrantView {
   scopes: string[];
   /** ISO 時間 */
   createdAt: string;
+  /** 授權之後才新增、同意頁還沒列過的範圍；不是空的就要重新授權 */
+  newScopes: string[];
+}
+
+/** 授權卡片上的重新授權提示：從 client 重新授權即可，同意後會取代舊授權 */
+function reauthNotice(newScopes: string[]) {
+  if (!newScopes.length) return '';
+  return html`<p class="status is-error">需要重新授權：授權之後新增了下列權限。從 client 重新授權即可，同意後會取代這個授權，不必先撤銷。</p>
+    <ul class="badges" aria-label="還沒授權過的新權限">
+      ${newScopes.map((s) => html`<li class="badge is-fail">${s}</li>`)}
+    </ul>`;
 }
 
 /** 記住的勾選：撤銷授權後仍然保留，清除後下次授權回到服務的預設 */
@@ -244,6 +255,7 @@ export function settingsPage(csrf: string, grants: GrantView[], choices: Consent
       content: html`<ul class="badges" aria-label="已授權的權限">
       ${g.scopes.length ? g.scopes.map((s) => html`<li class="badge is-pass">${s}</li>`) : html`<li class="badge">沒有任何權限</li>`}
     </ul>
+    ${reauthNotice(g.newScopes)}
     <p class="meta">授權時間：${g.createdAt}</p>
     <form class="panel" id="revoke-${i + 1}-form" method="post" action="/settings/revoke">
       <input type="hidden" name="csrf" value="${csrf}">

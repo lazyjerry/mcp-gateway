@@ -2,7 +2,7 @@
 import type { AuthRequest, GrantSummary, OAuthHelpers } from '@cloudflare/workers-oauth-provider';
 import { Hono, type Context } from 'hono';
 import { listRecent } from './audit';
-import { findChoice, forgetChoice, listChoices, presetScopes, rememberChoice } from './consents';
+import { findChoice, forgetChoice, listChoices, presetScopes, rememberChoice, unseenScopes } from './consents';
 import { listRecentEvents, recordEvent, type AuthEventClient, type AuthEventType } from './events';
 import { INSTANT_EVENTS, sendEventMail } from './mailer';
 import { loadServices, scopesOf } from './services';
@@ -194,11 +194,24 @@ authApp.post('/logout', async (c) => {
 authApp.get('/settings', async (c) => {
   const session = await readSession(c);
   if (!session) return c.redirect('/login?next=/settings', 302);
-  const [grants, choices] = await Promise.all([allGrants(c.env.OAUTH_PROVIDER), listChoices(c.env.DB)]);
+  const [grants, choices, services] = await Promise.all([
+    allGrants(c.env.OAUTH_PROVIDER),
+    listChoices(c.env.DB),
+    loadServices(c.env),
+  ]);
+  const allScopes = scopesOf(services);
+  const choiceOf = new Map(choices.map((ch) => [ch.clientId, ch]));
   return c.html(
     settingsPage(
       session.csrf,
-      grants.map((g) => ({ id: g.id, clientId: g.clientId, clientName: clientName(g), scopes: g.scope, createdAt: new Date(g.createdAt * 1000).toISOString() })),
+      grants.map((g) => ({
+        id: g.id,
+        clientId: g.clientId,
+        clientName: clientName(g),
+        scopes: g.scope,
+        createdAt: new Date(g.createdAt * 1000).toISOString(),
+        newScopes: unseenScopes(allScopes, choiceOf.get(g.clientId) ?? null, g.scope),
+      })),
       choices,
     ),
   );

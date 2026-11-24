@@ -105,3 +105,50 @@ describe('記住同意頁的勾選', () => {
     expect(await remembered(clientId)).toBeDefined();
   });
 });
+
+/** 設定頁裡某個 client 的授權卡片（有撤銷表單的那幾張） */
+async function grantCards(clientId: string): Promise<string[]> {
+  const html = await page('/settings');
+  return html.split('<section').filter((item) => item.includes('/settings/revoke') && item.includes(clientId));
+}
+
+describe('設定頁標記需要重新授權的 client', () => {
+  it('授權後才新增的範圍，標記需要重新授權並列出這些範圍', async () => {
+    const clientId = await registerClient('服務變多 client');
+    const all = env.SERVICES;
+    env.SERVICES = 'ROGUE';
+    try {
+      await answer(clientId, 'approve', ['rogue:read']);
+    } finally {
+      env.SERVICES = all;
+    }
+    const [card] = await grantCards(clientId);
+    expect(card).toContain('需要重新授權');
+    expect(card).toContain('<li class="badge is-fail">notes:read</li>');
+    expect(card).toContain('<li class="badge is-fail">notes:write</li>');
+    expect(card).not.toContain('<li class="badge is-fail">rogue:read</li>');
+  });
+
+  it('同意頁列過但沒勾的範圍不算，不標記', async () => {
+    const clientId = await registerClient('刻意少勾 client');
+    await answer(clientId, 'approve', ['notes:read']);
+    const [card] = await grantCards(clientId);
+    expect(card).toBeDefined();
+    expect(card).not.toContain('需要重新授權');
+  });
+
+  it('從 client 重新授權後，舊授權被取代，標記消失', async () => {
+    const clientId = await registerClient('重新授權 client');
+    const all = env.SERVICES;
+    env.SERVICES = 'ROGUE';
+    try {
+      await answer(clientId, 'approve', ['rogue:read']);
+    } finally {
+      env.SERVICES = all;
+    }
+    await answer(clientId, 'approve', ['notes:read', 'rogue:read']);
+    const cards = await grantCards(clientId);
+    expect(cards).toHaveLength(1);
+    expect(cards[0]).not.toContain('需要重新授權');
+  });
+});
